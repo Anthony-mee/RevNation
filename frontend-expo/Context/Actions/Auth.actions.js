@@ -30,11 +30,20 @@ export const loginUser = (user, dispatch) => {
         })
         .catch((err) => {
             const isInvalidCredentials = /invalid credentials/i.test(String(err?.message));
+            const isNetworkError = /network request failed/i.test(String(err?.message));
             Toast.show({
                 topOffset: 60,
                 type: "error",
-                text1: isInvalidCredentials ? "Invalid email or password" : "Login failed",
-                text2: isInvalidCredentials ? "Please try again" : String(err?.message || "Please try again"),
+                text1: isInvalidCredentials
+                    ? "Invalid email or password"
+                    : isNetworkError
+                        ? "Cannot reach server"
+                        : "Login failed",
+                text2: isInvalidCredentials
+                    ? "Please try again"
+                    : isNetworkError
+                        ? `Check backend URL in baseurl.js (${baseURL}) and use same WiFi.`
+                        : String(err?.message || "Please try again"),
             });
             console.log(err);
             logoutUser(dispatch);

@@ -5,11 +5,12 @@ import { Badge } from "react-native-paper";
 
 const CartIcon = () => {
     const cartItems = useSelector((state) => state.cartItems);
+    const totalCount = cartItems.reduce((sum, item) => sum + Number(item?.quantity || 1), 0);
     return (
         <>
-            {cartItems.length ? (
+            {totalCount ? (
                 <Badge style={styles.badge}>
-                    <Text style={styles.text}>{cartItems.length}</Text>
+                    <Text style={styles.text}>{totalCount}</Text>
                 </Badge>
             ) : null}
         </>

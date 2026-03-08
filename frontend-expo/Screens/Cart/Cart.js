@@ -1,25 +1,32 @@
 import React from "react";
 import { useSelector, useDispatch } from "react-redux";
-import { Text, View, Image, StyleSheet, Dimensions, TouchableOpacity, ScrollView } from "react-native";
+import { Text, View, Image, StyleSheet, TouchableOpacity, useWindowDimensions, Platform } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { SwipeListView } from "react-native-swipe-list-view";
-import { removeFromCart, clearCart } from "../../Redux/Actions/cartActions";
+import { addToCart, removeFromCart, clearCart } from "../../Redux/Actions/cartActions";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 
-var { height, width } = Dimensions.get("window");
 const FALLBACK = "https://cdn.pixabay.com/photo/2012/04/01/17/29/box-23649_960_720.png";
 
 const Cart = () => {
+    const { width } = useWindowDimensions();
+    const isSmallScreen = width < 380;
     const navigation = useNavigation();
     const dispatch = useDispatch();
     const cartItems = useSelector((s) => s.cartItems);
-    let total = 0;
-    cartItems.forEach((c) => (total += c.price));
+    const itemCount = cartItems.reduce((sum, c) => sum + Number(c.quantity || 1), 0);
+    const subtotal = cartItems.reduce((sum, c) => sum + Number(c.price || 0) * Number(c.quantity || 1), 0);
+    const shipping = itemCount > 0 ? 0 : 0;
+    const total = subtotal + shipping;
 
     const renderItem = ({ item }) => (
-        <View style={styles.cartItem}>
-            <View style={styles.imageContainer}>
+        <View style={[styles.cartItem, isSmallScreen && styles.cartItemSmall]}>
+            <View style={styles.itemTopRow}>
+                <Ionicons name="storefront-outline" size={14} color="#111827" />
+                <Text style={styles.shopName}>RevNation Official Shop</Text>
+            </View>
+            <View style={[styles.imageContainer, isSmallScreen && styles.imageContainerSmall]}>
                 <Image 
                     style={styles.productImage} 
                     source={{ uri: item.image || FALLBACK }}
@@ -27,13 +34,18 @@ const Cart = () => {
                 />
             </View>
             <View style={styles.itemDetails}>
-                <Text style={styles.productName} numberOfLines={2}>{item.name}</Text>
+                <Text style={[styles.productName, isSmallScreen && styles.productNameSmall]} numberOfLines={2}>{item.name}</Text>
                 <Text style={styles.productBrand}>{item.brand || "Unknown Brand"}</Text>
                 <View style={styles.priceRow}>
-                    <Text style={styles.productPrice}>${item.price.toFixed(2)}</Text>
-                    <View style={styles.quantityBadge}>
-                        <Ionicons name="cube-outline" size={14} color="#666" />
-                        <Text style={styles.quantityText}>Qty: 1</Text>
+                    <Text style={[styles.productPrice, isSmallScreen && styles.productPriceSmall]}>${item.price.toFixed(2)}</Text>
+                    <View style={styles.quantityControl}>
+                        <TouchableOpacity style={styles.qtyBtn} onPress={() => dispatch(removeFromCart(item))}>
+                            <Ionicons name="remove" size={14} color="#111827" />
+                        </TouchableOpacity>
+                        <Text style={styles.qtyText}>{Number(item.quantity || 1)}</Text>
+                        <TouchableOpacity style={styles.qtyBtn} onPress={() => dispatch(addToCart({ ...item, quantity: 1 }))}>
+                            <Ionicons name="add" size={14} color="#111827" />
+                        </TouchableOpacity>
                     </View>
                 </View>
             </View>
@@ -47,12 +59,12 @@ const Cart = () => {
     );
 
     const renderHiddenItem = (rowData) => (
-        <TouchableOpacity onPress={() => dispatch(removeFromCart(rowData.item))}>
-            <View style={styles.hiddenButton}>
-                <Ionicons name="trash" color="white" size={30} />
+        <View style={styles.hiddenRow}>
+            <TouchableOpacity onPress={() => dispatch(removeFromCart(rowData.item))} style={[styles.hiddenButton, isSmallScreen && styles.hiddenButtonSmall]}>
+                <Ionicons name="trash" color="white" size={isSmallScreen ? 22 : 26} />
                 <Text style={styles.hiddenButtonText}>Delete</Text>
-            </View>
-        </TouchableOpacity>
+            </TouchableOpacity>
+        </View>
     );
 
     return (
@@ -60,17 +72,17 @@ const Cart = () => {
             {cartItems.length > 0 ? (
                 <>
                     <View style={styles.header}>
-                        <Text style={styles.headerTitle}>Shopping Cart</Text>
-                        <Text style={styles.headerSubtitle}>{cartItems.length} {cartItems.length === 1 ? 'item' : 'items'}</Text>
+                        <Text style={[styles.headerTitle, isSmallScreen && styles.headerTitleSmall]}>Cart</Text>
+                        <Text style={styles.headerSubtitle}>All ({itemCount} {itemCount === 1 ? "item" : "items"})</Text>
                     </View>
                     <SwipeListView
                         data={cartItems}
                         renderItem={renderItem}
                         renderHiddenItem={renderHiddenItem}
                         disableRightSwipe
-                        rightOpenValue={-75}
+                        rightOpenValue={-90}
+                        contentContainerStyle={[styles.listContent, isSmallScreen && styles.listContentSmall]}
                         keyExtractor={(item, i) => String(item.id || item._id || i)}
-                        contentContainerStyle={styles.listContent}
                     />
                 </>
             ) : (
@@ -80,7 +92,7 @@ const Cart = () => {
                     <Text style={styles.emptySubtitle}>Add some products to get started</Text>
                     <TouchableOpacity 
                         style={styles.shopButton}
-                        onPress={() => navigation.navigate("Home")}
+                        onPress={() => navigation.navigate("Home", { screen: "ShopProducts" })}
                     >
                         <Text style={styles.shopButtonText}>Start Shopping</Text>
                     </TouchableOpacity>
@@ -88,27 +100,37 @@ const Cart = () => {
             )}
             {cartItems.length > 0 && (
                 <View style={styles.bottomContainer}>
-                    <View style={styles.totalSection}>
-                        <Text style={styles.totalLabel}>Total Amount</Text>
-                        <Text style={styles.totalPrice}>${total.toFixed(2)}</Text>
+                    <View style={styles.summaryGrid}>
+                        <View style={styles.summaryRow}>
+                            <Text style={styles.totalLabel}>Subtotal</Text>
+                            <Text style={styles.summaryValue}>${subtotal.toFixed(2)}</Text>
+                        </View>
+                        <View style={styles.summaryRow}>
+                            <Text style={styles.totalLabel}>Shipping</Text>
+                            <Text style={styles.summaryValue}>${shipping.toFixed(2)}</Text>
+                        </View>
                     </View>
-                    <View style={styles.actionButtons}>
+                    <View style={styles.totalSection}>
+                        <Text style={styles.totalLabelStrong}>Total</Text>
+                        <Text style={[styles.totalPrice, isSmallScreen && styles.totalPriceSmall]}>${total.toFixed(2)}</Text>
+                    </View>
+                    <View style={[styles.actionButtons, isSmallScreen && styles.actionButtonsSmall]}>
                         <TouchableOpacity 
-                            style={styles.clearButton}
+                            style={[styles.clearButton, isSmallScreen && styles.clearButtonSmall]}
                             onPress={() => dispatch(clearCart())}
                         >
                             <Ionicons name="trash-outline" size={18} color="#FF6B6B" />
                             <Text style={styles.clearButtonText}>Clear Cart</Text>
                         </TouchableOpacity>
                         <TouchableOpacity 
-                            style={styles.checkoutButton}
+                            style={[styles.checkoutButton, isSmallScreen && styles.checkoutButtonSmall]}
                             onPress={() => navigation.navigate("Checkout")}
                         >
                             <LinearGradient
                                 colors={['#4CAF50', '#45a049']}
                                 style={styles.checkoutGradient}
                             >
-                                <Text style={styles.checkoutButtonText}>Proceed to Checkout</Text>
+                                <Text style={styles.checkoutButtonText}>{isSmallScreen ? "Place Order" : "Place Order"}</Text>
                                 <Ionicons name="arrow-forward" size={18} color="white" />
                             </LinearGradient>
                         </TouchableOpacity>
@@ -146,6 +168,11 @@ const styles = StyleSheet.create({
         padding: 12,
         paddingBottom: 180,
     },
+    listContentSmall: {
+        paddingHorizontal: 10,
+        paddingTop: 10,
+        paddingBottom: 205,
+    },
     cartItem: {
         backgroundColor: "white",
         borderRadius: 12,
@@ -153,11 +180,28 @@ const styles = StyleSheet.create({
         padding: 12,
         flexDirection: "row",
         alignItems: "center",
+        flexWrap: "wrap",
         shadowColor: "#000",
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.08,
         shadowRadius: 8,
         elevation: 3,
+    },
+    itemTopRow: {
+        width: "100%",
+        flexDirection: "row",
+        alignItems: "center",
+        marginBottom: 10,
+        gap: 4,
+    },
+    shopName: {
+        fontSize: 12,
+        color: "#111827",
+        fontWeight: "700",
+    },
+    cartItemSmall: {
+        padding: 10,
+        marginBottom: 10,
     },
     imageContainer: {
         width: 80,
@@ -165,6 +209,10 @@ const styles = StyleSheet.create({
         borderRadius: 8,
         overflow: "hidden",
         backgroundColor: "#F8F9FA",
+    },
+    imageContainerSmall: {
+        width: 70,
+        height: 70,
     },
     productImage: {
         width: "100%",
@@ -181,6 +229,9 @@ const styles = StyleSheet.create({
         color: "#2C3E50",
         marginBottom: 4,
     },
+    productNameSmall: {
+        fontSize: 14,
+    },
     productBrand: {
         fontSize: 13,
         color: "#95A5A6",
@@ -196,33 +247,56 @@ const styles = StyleSheet.create({
         fontWeight: "bold",
         color: "#27AE60",
     },
-    quantityBadge: {
+    productPriceSmall: {
+        fontSize: 16,
+    },
+    quantityControl: {
         flexDirection: "row",
         alignItems: "center",
-        backgroundColor: "#F0F3F5",
-        paddingHorizontal: 10,
+        backgroundColor: "#F3F4F6",
+        paddingHorizontal: 8,
         paddingVertical: 4,
         borderRadius: 12,
+        borderWidth: 1,
+        borderColor: "#E5E7EB",
     },
-    quantityText: {
-        fontSize: 12,
-        color: "#666",
-        marginLeft: 4,
+    qtyBtn: {
+        width: 22,
+        height: 22,
+        borderRadius: 11,
+        backgroundColor: "#ffffff",
+        justifyContent: "center",
+        alignItems: "center",
+        borderWidth: 1,
+        borderColor: "#E5E7EB",
+    },
+    qtyText: {
+        fontSize: 13,
+        color: "#111827",
+        marginHorizontal: 10,
         fontWeight: "500",
     },
     deleteButton: {
         padding: 8,
         marginLeft: 8,
     },
+    hiddenRow: {
+        flex: 1,
+        justifyContent: "center",
+        alignItems: "flex-end",
+        marginBottom: 12,
+    },
     hiddenButton: {
         backgroundColor: "#FF6B6B",
         justifyContent: "center",
         alignItems: "center",
-        width: 75,
-        height: "92%",
-        marginBottom: 12,
+        width: 86,
+        height: "100%",
         marginRight: 12,
         borderRadius: 12,
+    },
+    hiddenButtonSmall: {
+        width: 78,
     },
     hiddenButtonText: {
         color: "white",
@@ -267,7 +341,7 @@ const styles = StyleSheet.create({
         backgroundColor: "white",
         paddingHorizontal: 20,
         paddingTop: 16,
-        paddingBottom: 20,
+        paddingBottom: Platform.OS === "ios" ? 28 : 18,
         borderTopLeftRadius: 20,
         borderTopRightRadius: 20,
         shadowColor: "#000",
@@ -280,24 +354,51 @@ const styles = StyleSheet.create({
         flexDirection: "row",
         justifyContent: "space-between",
         alignItems: "center",
-        marginBottom: 16,
-        paddingBottom: 12,
+        marginBottom: 12,
+        paddingTop: 8,
+        paddingBottom: 10,
         borderBottomWidth: 1,
         borderBottomColor: "#E8ECEF",
     },
+    summaryGrid: {
+        marginBottom: 2,
+    },
+    summaryRow: {
+        flexDirection: "row",
+        justifyContent: "space-between",
+        alignItems: "center",
+        marginBottom: 4,
+    },
+    summaryValue: {
+        fontSize: 14,
+        color: "#374151",
+        fontWeight: "600",
+    },
     totalLabel: {
-        fontSize: 16,
+        fontSize: 14,
         color: "#7F8C8D",
         fontWeight: "500",
+    },
+    totalLabelStrong: {
+        fontSize: 16,
+        color: "#111827",
+        fontWeight: "700",
     },
     totalPrice: {
         fontSize: 26,
         fontWeight: "bold",
         color: "#2C3E50",
     },
+    totalPriceSmall: {
+        fontSize: 22,
+    },
     actionButtons: {
         flexDirection: "row",
         gap: 12,
+    },
+    actionButtonsSmall: {
+        flexDirection: "column",
+        gap: 10,
     },
     clearButton: {
         flex: 0.35,
@@ -309,6 +410,10 @@ const styles = StyleSheet.create({
         borderRadius: 12,
         gap: 6,
     },
+    clearButtonSmall: {
+        flex: undefined,
+        width: "100%",
+    },
     clearButtonText: {
         color: "#FF6B6B",
         fontSize: 14,
@@ -318,6 +423,10 @@ const styles = StyleSheet.create({
         flex: 0.65,
         borderRadius: 12,
         overflow: "hidden",
+    },
+    checkoutButtonSmall: {
+        flex: undefined,
+        width: "100%",
     },
     checkoutGradient: {
         flexDirection: "row",
@@ -330,6 +439,9 @@ const styles = StyleSheet.create({
         color: "white",
         fontSize: 16,
         fontWeight: "bold",
+    },
+    headerTitleSmall: {
+        fontSize: 21,
     },
 });
 

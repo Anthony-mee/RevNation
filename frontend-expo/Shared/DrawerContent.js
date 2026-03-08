@@ -20,6 +20,16 @@ const DrawerContent = ({ navigation }) => {
                 icon="home"
             />
             <Drawer.Item
+                label="Shop Products"
+                onPress={() => navigation.navigate("Main", { screen: "Home", params: { screen: "ShopProducts" } })}
+                icon="shopping"
+            />
+            <Drawer.Item
+                label="Resell Products"
+                onPress={() => navigation.navigate("Main", { screen: "Home", params: { screen: "ResellProducts" } })}
+                icon="tag-multiple"
+            />
+            <Drawer.Item
                 label="Cart"
                 onPress={() => navigation.navigate("Main", { screen: "Cart Screen" })}
                 icon="cart"
