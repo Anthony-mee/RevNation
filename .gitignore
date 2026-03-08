@@ -1,0 +1,13 @@
+# Backend
+backend/node_modules/
+backend/.env
+backend/uploads/
+backend/*firebase-adminsdk*.json
+backend/firebase-service-account*.json
+backend/npm-debug.log*
+
+# Frontend
+frontend-expo/node_modules/
+frontend-expo/.expo/
+frontend-expo/google-services.json
+frontend-expo/npm-debug.log*
