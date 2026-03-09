@@ -89,12 +89,12 @@ const ProductCard = (props) => {
 
 const styles = StyleSheet.create({
     container: {
-        backgroundColor: "#1a2332",
+        backgroundColor: "#131927",
         borderRadius: 16,
         overflow: "hidden",
         marginBottom: 8,
         borderWidth: 1,
-        borderColor: "rgba(37, 99, 235, 0.15)",
+        borderColor: "rgba(234, 88, 12, 0.15)",
         shadowColor: "#000",
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.3,
@@ -104,7 +104,7 @@ const styles = StyleSheet.create({
     imageContainer: {
         width: "100%",
         height: 180,
-        backgroundColor: "#0f1729",
+        backgroundColor: "#0b0f1a",
         position: "relative",
     },
     image: {
@@ -130,7 +130,7 @@ const styles = StyleSheet.create({
     },
     brand: {
         fontSize: 11,
-        color: "#60a5fa",
+        color: "#fb923c",
         fontWeight: "600",
         marginBottom: 4,
         textTransform: "uppercase",
@@ -153,16 +153,16 @@ const styles = StyleSheet.create({
     price: {
         fontSize: 20,
         fontWeight: "bold",
-        color: "#60a5fa",
+        color: "#fb923c",
     },
     addButton: {
-        backgroundColor: "#2563eb",
+        backgroundColor: "#ea580c",
         width: 36,
         height: 36,
         borderRadius: 18,
         justifyContent: "center",
         alignItems: "center",
-        shadowColor: "#2563eb",
+        shadowColor: "#ea580c",
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.5,
         shadowRadius: 4,

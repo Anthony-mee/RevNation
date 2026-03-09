@@ -32,16 +32,16 @@ const Products = () => {
         <View style={styles.listHeader}>
             <View style={styles.headerItem} />
             <View style={styles.headerItem}>
-                <Text style={{ fontWeight: "600" }}>Brand</Text>
+                <Text style={{ fontWeight: "600", color: "#f1f5f9" }}>Brand</Text>
             </View>
             <View style={styles.headerItem}>
-                <Text style={{ fontWeight: "600" }}>Name</Text>
+                <Text style={{ fontWeight: "600", color: "#f1f5f9" }}>Name</Text>
             </View>
             <View style={styles.headerItem}>
-                <Text style={{ fontWeight: "600" }}>Category</Text>
+                <Text style={{ fontWeight: "600", color: "#f1f5f9" }}>Category</Text>
             </View>
             <View style={styles.headerItem}>
-                <Text style={{ fontWeight: "600" }}>Price</Text>
+                <Text style={{ fontWeight: "600", color: "#f1f5f9" }}>Price</Text>
             </View>
         </View>
     );
@@ -106,7 +106,7 @@ const Products = () => {
     );
 
     return (
-        <View style={{ flex: 1 }}>
+        <View style={{ flex: 1, backgroundColor: "#0b0f1a" }}>
             <View style={styles.buttonContainer}>
                 <EasyButton
                     secondary
@@ -147,7 +147,7 @@ const Products = () => {
             />
             {loading ? (
                 <View style={styles.spinner}>
-                    <ActivityIndicator size="large" color="red" />
+                    <ActivityIndicator size="large" color="#ea580c" />
                 </View>
             ) : (
                 <FlatList
@@ -175,7 +175,7 @@ const styles = StyleSheet.create({
     listHeader: {
         flexDirection: "row",
         padding: 5,
-        backgroundColor: "gainsboro",
+        backgroundColor: "#131927",
     },
     headerItem: {
         margin: 3,

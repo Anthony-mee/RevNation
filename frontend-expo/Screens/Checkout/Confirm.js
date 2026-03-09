@@ -53,35 +53,35 @@ const Confirm = (props) => {
     if (!order) {
         return (
             <View style={styles.container}>
-                <Text>No order data.</Text>
+                <Text style={{ color: "#f1f5f9" }}>No order data.</Text>
             </View>
         );
     }
 
     return (
-        <Surface>
+        <Surface style={{ backgroundColor: "#0b0f1a" }}>
             <ScrollView contentContainerStyle={styles.container}>
                 <View style={styles.titleContainer}>
-                    <Text style={{ fontSize: 20, fontWeight: "bold" }}>Confirm Order</Text>
-                    <View style={{ borderWidth: 1, borderColor: "orange", marginTop: 10 }}>
+                    <Text style={{ fontSize: 20, fontWeight: "bold", color: "#f1f5f9" }}>Confirm Order</Text>
+                    <View style={{ borderWidth: 1, borderColor: "#ea580c", marginTop: 10 }}>
                         <Text style={styles.title}>Shipping to:</Text>
                         <View style={{ padding: 8 }}>
-                            <Text>Address: {order.shippingAddress1}</Text>
-                            <Text>Address2: {order.shippingAddress2}</Text>
-                            <Text>City: {order.city}</Text>
-                            <Text>Zip Code: {order.zip}</Text>
-                            <Text>Country: {order.country}</Text>
+                            <Text style={{ color: "#f1f5f9" }}>Address: {order.shippingAddress1}</Text>
+                            <Text style={{ color: "#f1f5f9" }}>Address2: {order.shippingAddress2}</Text>
+                            <Text style={{ color: "#f1f5f9" }}>City: {order.city}</Text>
+                            <Text style={{ color: "#f1f5f9" }}>Zip Code: {order.zip}</Text>
+                            <Text style={{ color: "#f1f5f9" }}>Country: {order.country}</Text>
                         </View>
                         <Text style={styles.title}>Items</Text>
                         {order.orderItems?.map((item, idx) => (
-                            <Surface key={item.id || item._id || idx} style={{ padding: 8, margin: 4 }}>
+                            <Surface key={item.id || item._id || idx} style={{ padding: 8, margin: 4, backgroundColor: "#131927" }}>
                                 <Avatar.Image
                                     size={48}
                                     source={{ uri: item.image || FALLBACK_IMAGE }}
                                 />
-                                <Text>{item.name}</Text>
+                                <Text style={{ color: "#f1f5f9" }}>{item.name}</Text>
                                 <Divider />
-                                <Text style={{ alignSelf: "flex-start" }}>$ {item.price}</Text>
+                                <Text style={{ alignSelf: "flex-start", color: "#fb923c" }}>$ {item.price}</Text>
                             </Surface>
                         ))}
                     </View>
@@ -99,7 +99,7 @@ const styles = StyleSheet.create({
         minHeight: height,
         padding: 8,
         alignContent: "center",
-        backgroundColor: "#f5f5f5",
+        backgroundColor: "#0b0f1a",
     },
     titleContainer: {
         justifyContent: "center",
@@ -111,7 +111,7 @@ const styles = StyleSheet.create({
         margin: 8,
         fontSize: 16,
         fontWeight: "bold",
-        color: "#1a1a1a",
+        color: "#f1f5f9",
     },
 });
 

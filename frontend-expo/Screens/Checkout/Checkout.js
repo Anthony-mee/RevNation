@@ -109,7 +109,7 @@ const Checkout = () => {
     };
 
     return (
-        <KeyboardAwareScrollView viewIsInsideTabBar extraHeight={200} enableOnAndroid style={{backgroundColor: "#f5f5f5"}}>
+        <KeyboardAwareScrollView viewIsInsideTabBar extraHeight={200} enableOnAndroid style={{backgroundColor: "#0b0f1a"}}>
             <FormContainer title="Shipping Address">
                 <Input label="Phone" placeholder="Phone (from profile)" value={phone} keyboardType="numeric" editable={false} />
                 <Input label="Address Line 1" placeholder="Shipping Address 1 (from profile)" value={address} editable={false} />

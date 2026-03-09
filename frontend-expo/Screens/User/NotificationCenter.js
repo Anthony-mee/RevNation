@@ -49,7 +49,7 @@ const NotificationCenter = () => {
     const renderItem = ({ item }) => (
         <View style={styles.card}>
             <View style={styles.iconContainer}>
-                <Ionicons name="notifications" size={24} color="#e91e63" />
+                <Ionicons name="notifications" size={24} color="#ea580c" />
             </View>
             <View style={styles.textContainer}>
                 <Text style={styles.title}>{item.title}</Text>
@@ -77,7 +77,7 @@ const NotificationCenter = () => {
                 }
                 ListEmptyComponent={
                     <View style={styles.empty}>
-                        <Ionicons name="notifications-off-outline" size={60} color="#ccc" />
+                        <Ionicons name="notifications-off-outline" size={60} color="#94a3b8" />
                         <Text style={styles.emptyText}>No notifications yet</Text>
                         <Text style={styles.emptySubtext}>
                             Notifications will appear here when you receive stock alerts, order updates, etc.
@@ -90,16 +90,16 @@ const NotificationCenter = () => {
 };
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: "#f5f5f5" },
+    container: { flex: 1, backgroundColor: "#0b0f1a" },
     clearBtn: {
         alignSelf: "flex-end",
         padding: 12,
         paddingBottom: 4,
     },
-    clearText: { color: "#e91e63", fontWeight: "600" },
+    clearText: { color: "#ea580c", fontWeight: "600" },
     card: {
         flexDirection: "row",
-        backgroundColor: "#fff",
+        backgroundColor: "#131927",
         marginHorizontal: 12,
         marginVertical: 4,
         padding: 14,
@@ -112,9 +112,9 @@ const styles = StyleSheet.create({
         justifyContent: "center",
     },
     textContainer: { flex: 1 },
-    title: { fontSize: 15, fontWeight: "700", color: "#1a1a1a", marginBottom: 2 },
-    body: { fontSize: 13, color: "#333", marginBottom: 4 },
-    date: { fontSize: 11, color: "#666" },
+    title: { fontSize: 15, fontWeight: "700", color: "#f1f5f9", marginBottom: 2 },
+    body: { fontSize: 13, color: "#94a3b8", marginBottom: 4 },
+    date: { fontSize: 11, color: "#64748b" },
     empty: {
         flex: 1,
         alignItems: "center",
@@ -122,8 +122,8 @@ const styles = StyleSheet.create({
         marginTop: 120,
         paddingHorizontal: 40,
     },
-    emptyText: { fontSize: 18, fontWeight: "600", color: "#666", marginTop: 16 },
-    emptySubtext: { fontSize: 13, color: "#888", textAlign: "center", marginTop: 8 },
+    emptyText: { fontSize: 18, fontWeight: "600", color: "#94a3b8", marginTop: 16 },
+    emptySubtext: { fontSize: 13, color: "#64748b", textAlign: "center", marginTop: 8 },
 });
 
 export default NotificationCenter;

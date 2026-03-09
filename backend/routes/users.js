@@ -315,6 +315,116 @@ router.put("/profile", authJwt, async (req, res) => {
   }
 });
 
+// POST /users/profile/photo — update user profile photo (for better mobile compatibility)
+router.post("/profile/photo", authJwt, upload.single("image"), async (req, res) => {
+  try {
+    console.log("[POST /profile/photo] Request received:", {
+      userId: req.user?.userId,
+      filePresent: !!req.file,
+      fileName: req.file?.filename,
+      uploadDir: config.uploadDir,
+    });
+
+    if (!req.file) {
+      console.error("[POST /profile/photo] No image file provided");
+      return res.status(400).json({ message: "No image file provided" });
+    }
+
+    console.log("[POST /profile/photo] Upload successful:", {
+      userId: req.user.userId,
+      filename: req.file.filename,
+      originalName: req.file.originalname,
+      path: req.file.path,
+    });
+
+    const imageUrl = buildImageUrl(req, req.file.filename);
+    console.log("[POST /profile/photo] Image URL built:", imageUrl);
+
+    const user = await User.findByIdAndUpdate(
+      req.user.userId,
+      { image: imageUrl },
+      { new: true }
+    );
+
+    if (!user) {
+      console.error("[POST /profile/photo] User not found:", req.user.userId);
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    const userJson = user.toJSON();
+    console.log("[POST /profile/photo] User updated successfully:", {
+      userId: userJson.id,
+      email: userJson.email,
+      image: userJson.image,
+    });
+    return res.status(200).json(userJson);
+  } catch (error) {
+    console.error("[POST /profile/photo] Error:", error.message, error.stack);
+    return res.status(500).json({ 
+      message: "Failed to update profile photo",
+      error: error.message 
+    });
+  }
+});
+
+// POST /users/profile/photo-base64 — update user profile photo (base64 encoded for React Native)
+router.post("/profile/photo-base64", authJwt, async (req, res) => {
+  try {
+    const { imageBase64, fileName } = req.body;
+    
+    console.log("[POST /profile/photo-base64] Request received:", {
+      userId: req.user?.userId,
+      hasImage: !!imageBase64,
+      fileName: fileName || "photo.jpg",
+    });
+
+    if (!imageBase64) {
+      console.error("[POST /profile/photo-base64] No image data provided");
+      return res.status(400).json({ message: "No image data provided" });
+    }
+
+    // Convert base64 to buffer
+    const imageBuffer = Buffer.from(imageBase64, "base64");
+    
+    // Create filename
+    const safeFileName = `${Date.now()}-${(fileName || "photo.jpg").replace(/[^a-zA-Z0-9.]/g, "_")}`;
+    const filePath = path.join(uploadPath, safeFileName);
+    
+    // Write file to disk
+    fs.writeFileSync(filePath, imageBuffer);
+    
+    console.log("[POST /profile/photo-base64] File saved:", safeFileName);
+
+    const imageUrl = buildImageUrl(req, safeFileName);
+    console.log("[POST /profile/photo-base64] Image URL built:", imageUrl);
+
+    const user = await User.findByIdAndUpdate(
+      req.user.userId,
+      { image: imageUrl },
+      { new: true }
+    );
+
+    if (!user) {
+      console.error("[POST /profile/photo-base64] User not found:", req.user.userId);
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    const userJson = user.toJSON();
+    console.log("[POST /profile/photo-base64] User updated successfully:", {
+      userId: userJson.id,
+      email: userJson.email,
+      image: userJson.image,
+    });
+    return res.status(200).json(userJson);
+  } catch (error) {
+    console.error("[POST /profile/photo-base64] Error:", error.message, error.stack);
+    return res.status(500).json({ 
+      message: "Failed to update profile photo",
+      error: error.message 
+    });
+  }
+});
+
 // POST /users/push-token — save device push token for the current user
 router.post("/push-token", authJwt, async (req, res) => {
   try {

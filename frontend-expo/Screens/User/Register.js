@@ -6,6 +6,7 @@ import {
     Image,
     TouchableOpacity,
     ActivityIndicator,
+    Alert,
 } from "react-native";
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 import { useNavigation } from "@react-navigation/native";
@@ -46,6 +47,19 @@ const Register = () => {
                 setImage(result.assets[0].uri);
             }
         }
+    };
+
+    const handlePhotoSelect = () => {
+        Alert.alert(
+            "Profile Photo",
+            "Choose an option",
+            [
+                { text: "Take Photo", onPress: takePhoto },
+                { text: "Choose from Library", onPress: pickImage },
+                { text: "Cancel", style: "cancel" }
+            ],
+            { cancelable: true }
+        );
     };
 
     const register = () => {
@@ -178,7 +192,7 @@ const Register = () => {
                             source={mainImage ? { uri: mainImage } : null}
                         />
                         {!mainImage && <Text style={styles.imagePlaceholder}>Profile Photo</Text>}
-                        <TouchableOpacity onPress={takePhoto} style={styles.imagePicker}>
+                        <TouchableOpacity onPress={handlePhotoSelect} style={styles.imagePicker}>
                             <Ionicons name="camera" size={20} color="white" />
                         </TouchableOpacity>
                     </View>
@@ -221,7 +235,7 @@ const Register = () => {
                         {error ? <Text style={styles.errorText}>{error}</Text> : null}
                         {isSubmitting ? (
                             <View style={styles.loadingRow}>
-                                <ActivityIndicator size="small" color="#60a5fa" />
+                                <ActivityIndicator size="small" color="#3b82f6" />
                                 <Text style={styles.loadingText}>Creating account...</Text>
                             </View>
                         ) : null}
@@ -310,7 +324,7 @@ const styles = StyleSheet.create({
         width: "100%",
         paddingHorizontal: 24,
         paddingVertical: 32,
-        backgroundColor: "#0f1729",
+        backgroundColor: "#131927",
         borderRadius: 24,
         marginBottom: 20,
         elevation: 2,
@@ -340,7 +354,7 @@ const styles = StyleSheet.create({
     },
     loadingText: {
         marginLeft: 8,
-        color: "#60a5fa",
+        color: "#3b82f6",
         fontSize: 14,
     },
     errorText: {
@@ -352,13 +366,13 @@ const styles = StyleSheet.create({
     registerButton: {
         width: "100%",
         height: 52,
-        backgroundColor: "#2563eb",
+        backgroundColor: "#ea580c",
         borderRadius: 12,
         justifyContent: "center",
         alignItems: "center",
         marginTop: 8,
         elevation: 3,
-        shadowColor: "#2563eb",
+        shadowColor: "#ea580c",
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.3,
         shadowRadius: 8,
@@ -370,7 +384,7 @@ const styles = StyleSheet.create({
         letterSpacing: 1,
     },
     buttonDisabled: {
-        backgroundColor: "#1e40af",
+        backgroundColor: "#60a5fa",
         opacity: 0.6,
     },
     divider: {
@@ -436,12 +450,12 @@ const styles = StyleSheet.create({
         backgroundColor: "transparent",
         borderRadius: 12,
         borderWidth: 2,
-        borderColor: "#2563eb",
+        borderColor: "#ea580c",
         justifyContent: "center",
         alignItems: "center",
     },
     loginButtonText: {
-        color: "#60a5fa",
+        color: "#fb923c",
         fontSize: 16,
         fontWeight: "700",
         letterSpacing: 1,
@@ -454,10 +468,10 @@ const styles = StyleSheet.create({
         justifyContent: "center",
         alignItems: "center",
         borderRadius: 50,
-        borderColor: "#2563eb",
+        borderColor: "#ea580c",
         elevation: 4,
         marginBottom: 24,
-        backgroundColor: "#1a2332",
+        backgroundColor: "#1e293b",
         alignSelf: "center",
     },
     image: {
@@ -474,7 +488,7 @@ const styles = StyleSheet.create({
         position: "absolute",
         right: 0,
         bottom: 0,
-        backgroundColor: "#2563eb",
+        backgroundColor: "#ea580c",
         padding: 8,
         borderRadius: 20,
         elevation: 6,

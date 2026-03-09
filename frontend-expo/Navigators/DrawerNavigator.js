@@ -28,61 +28,58 @@ const DrawerNavigator = () => {
 
     // Mobile: real drawer navigator for rubric compliance
     return (
-        <NativeDrawer.Navigator
-            drawerContent={(props) => <DrawerContent {...props} />}
-            screenOptions={({ navigation }) => ({
-                headerStyle: {
-                    backgroundColor: "#0f172a",
-                },
-                headerTintColor: "#f8fafc",
-                headerTitleStyle: {
-                    fontWeight: "700",
-                },
-                drawerStyle: {
-                    width: "78%",
-                    backgroundColor: "#111827",
-                },
-                sceneContainerStyle: {
-                    backgroundColor: "#0a1628",
-                },
-                headerRight: () => (
-                    <TouchableOpacity
-                        onPress={() => navigation.navigate("Main", { screen: "User", params: { screen: isAuthenticated ? "User Profile" : "Login" } })}
-                        style={styles.headerAction}
-                    >
-                        <Text style={styles.headerActionText}>{isAuthenticated ? "Profile" : "Login"}</Text>
-                    </TouchableOpacity>
-                ),
-            })}
-        >
-            <NativeDrawer.Screen
-                name="Main"
-                component={Main}
-                options={{ title: "RevNation" }}
-            />
-        </NativeDrawer.Navigator>
+        <View style={styles.mobileContainer}>
+            <WebNavBar />
+            <View style={styles.mobileContentWrapper}>
+                <NativeDrawer.Navigator
+                    drawerContent={(props) => <DrawerContent {...props} />}
+                    screenOptions={({ navigation }) => ({
+                        headerStyle: {
+                            backgroundColor: "transparent",
+                            borderBottomWidth: 0,
+                            elevation: 0,
+                            shadowOpacity: 0,
+                        },
+                        headerTintColor: "#f8fafc",
+                        headerTitleStyle: {
+                            fontWeight: "700",
+                            color: "transparent",
+                        },
+                        drawerStyle: {
+                            width: "78%",
+                            backgroundColor: "#111827",
+                        },
+                        sceneContainerStyle: {
+                            backgroundColor: "#0b0f1a",
+                        },
+                        headerShown: false,
+                    })}
+                >
+                    <NativeDrawer.Screen
+                        name="Main"
+                        component={Main}
+                        options={{ title: "RevNation" }}
+                    />
+                </NativeDrawer.Navigator>
+            </View>
+        </View>
     );
 };
 
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: "#ffffff",
+        backgroundColor: "#0b0f1a",
+    },
+    mobileContainer: {
+        flex: 1,
+        backgroundColor: "#0b0f1a",
+    },
+    mobileContentWrapper: {
+        flex: 1,
     },
     contentContainer: {
         flex: 1,
-    },
-    headerAction: {
-        marginRight: 14,
-        backgroundColor: "#2563eb",
-        borderRadius: 8,
-        paddingHorizontal: 12,
-        paddingVertical: 6,
-    },
-    headerActionText: {
-        color: "#ffffff",
-        fontSize: 12,
-        fontWeight: "700",
     },
 });
 

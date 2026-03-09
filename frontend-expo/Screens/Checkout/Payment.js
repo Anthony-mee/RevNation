@@ -24,11 +24,11 @@ const Payment = ({ route }) => {
 
     return (
         <View style={styles.container}>
-            <Text variant="titleLarge">Choose your payment method</Text>
-            <Surface style={{ width: "100%" }}>
+            <Text variant="titleLarge" style={{ color: "#f1f5f9" }}>Choose your payment method</Text>
+            <Surface style={{ width: "100%", backgroundColor: "#131927" }}>
                 <RadioButton.Group value={selected} onValueChange={setSelected}>
                     {methods.map((item, i) => (
-                        <RadioButton.Item key={i} value={item.value} color="red" label={item.name} />
+                        <RadioButton.Item key={i} value={item.value} color="#ea580c" label={item.name} />
                     ))}
                 </RadioButton.Group>
             </Surface>
@@ -52,7 +52,7 @@ const styles = StyleSheet.create({
         justifyContent: "flex-start",
         alignItems: "center",
         paddingVertical: 20,
-        backgroundColor: "#f5f5f5",
+        backgroundColor: "#0b0f1a",
     },
 });
 

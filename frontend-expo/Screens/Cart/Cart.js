@@ -23,7 +23,7 @@ const Cart = () => {
     const renderItem = ({ item }) => (
         <View style={[styles.cartItem, isSmallScreen && styles.cartItemSmall]}>
             <View style={styles.itemTopRow}>
-                <Ionicons name="storefront-outline" size={14} color="#111827" />
+                <Ionicons name="storefront-outline" size={14} color="#94a3b8" />
                 <Text style={styles.shopName}>RevNation Official Shop</Text>
             </View>
             <View style={[styles.imageContainer, isSmallScreen && styles.imageContainerSmall]}>
@@ -40,11 +40,11 @@ const Cart = () => {
                     <Text style={[styles.productPrice, isSmallScreen && styles.productPriceSmall]}>${item.price.toFixed(2)}</Text>
                     <View style={styles.quantityControl}>
                         <TouchableOpacity style={styles.qtyBtn} onPress={() => dispatch(removeFromCart(item))}>
-                            <Ionicons name="remove" size={14} color="#111827" />
+                            <Ionicons name="remove" size={14} color="#f1f5f9" />
                         </TouchableOpacity>
                         <Text style={styles.qtyText}>{Number(item.quantity || 1)}</Text>
                         <TouchableOpacity style={styles.qtyBtn} onPress={() => dispatch(addToCart({ ...item, quantity: 1 }))}>
-                            <Ionicons name="add" size={14} color="#111827" />
+                            <Ionicons name="add" size={14} color="#f1f5f9" />
                         </TouchableOpacity>
                     </View>
                 </View>
@@ -87,7 +87,7 @@ const Cart = () => {
                 </>
             ) : (
                 <View style={styles.emptyContainer}>
-                    <Ionicons name="cart-outline" size={100} color="#E0E0E0" />
+                    <Ionicons name="cart-outline" size={100} color="#94a3b8" />
                     <Text style={styles.emptyTitle}>Your Cart is Empty</Text>
                     <Text style={styles.emptySubtitle}>Add some products to get started</Text>
                     <TouchableOpacity 
@@ -127,7 +127,7 @@ const Cart = () => {
                             onPress={() => navigation.navigate("Checkout")}
                         >
                             <LinearGradient
-                                colors={['#4CAF50', '#45a049']}
+                                colors={['#ea580c', '#c2410c']}
                                 style={styles.checkoutGradient}
                             >
                                 <Text style={styles.checkoutButtonText}>{isSmallScreen ? "Place Order" : "Place Order"}</Text>
@@ -145,24 +145,24 @@ const Cart = () => {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: "#F5F7FA",
+        backgroundColor: "#0b0f1a",
     },
     header: {
-        backgroundColor: "white",
+        backgroundColor: "#131927",
         padding: 20,
         paddingTop: 10,
         borderBottomWidth: 1,
-        borderBottomColor: "#E8ECEF",
+        borderBottomColor: "rgba(234, 88, 12, 0.15)",
     },
     headerTitle: {
         fontSize: 24,
         fontWeight: "bold",
-        color: "#2C3E50",
+        color: "#f1f5f9",
         marginBottom: 4,
     },
     headerSubtitle: {
         fontSize: 14,
-        color: "#7F8C8D",
+        color: "#94a3b8",
     },
     listContent: {
         padding: 12,
@@ -174,7 +174,7 @@ const styles = StyleSheet.create({
         paddingBottom: 205,
     },
     cartItem: {
-        backgroundColor: "white",
+        backgroundColor: "#131927",
         borderRadius: 12,
         marginBottom: 12,
         padding: 12,
@@ -196,7 +196,7 @@ const styles = StyleSheet.create({
     },
     shopName: {
         fontSize: 12,
-        color: "#111827",
+        color: "#94a3b8",
         fontWeight: "700",
     },
     cartItemSmall: {
@@ -208,7 +208,7 @@ const styles = StyleSheet.create({
         height: 80,
         borderRadius: 8,
         overflow: "hidden",
-        backgroundColor: "#F8F9FA",
+        backgroundColor: "#0b0f1a",
     },
     imageContainerSmall: {
         width: 70,
@@ -226,7 +226,7 @@ const styles = StyleSheet.create({
     productName: {
         fontSize: 16,
         fontWeight: "600",
-        color: "#2C3E50",
+        color: "#f1f5f9",
         marginBottom: 4,
     },
     productNameSmall: {
@@ -234,7 +234,7 @@ const styles = StyleSheet.create({
     },
     productBrand: {
         fontSize: 13,
-        color: "#95A5A6",
+        color: "#94a3b8",
         marginBottom: 8,
     },
     priceRow: {
@@ -245,7 +245,7 @@ const styles = StyleSheet.create({
     productPrice: {
         fontSize: 18,
         fontWeight: "bold",
-        color: "#27AE60",
+        color: "#fb923c",
     },
     productPriceSmall: {
         fontSize: 16,
@@ -253,26 +253,26 @@ const styles = StyleSheet.create({
     quantityControl: {
         flexDirection: "row",
         alignItems: "center",
-        backgroundColor: "#F3F4F6",
+        backgroundColor: "#0b0f1a",
         paddingHorizontal: 8,
         paddingVertical: 4,
         borderRadius: 12,
         borderWidth: 1,
-        borderColor: "#E5E7EB",
+        borderColor: "rgba(234, 88, 12, 0.2)",
     },
     qtyBtn: {
         width: 22,
         height: 22,
         borderRadius: 11,
-        backgroundColor: "#ffffff",
+        backgroundColor: "#131927",
         justifyContent: "center",
         alignItems: "center",
         borderWidth: 1,
-        borderColor: "#E5E7EB",
+        borderColor: "rgba(234, 88, 12, 0.3)",
     },
     qtyText: {
         fontSize: 13,
-        color: "#111827",
+        color: "#f1f5f9",
         marginHorizontal: 10,
         fontWeight: "500",
     },
@@ -308,22 +308,23 @@ const styles = StyleSheet.create({
         alignItems: "center",
         justifyContent: "center",
         paddingHorizontal: 40,
+        backgroundColor: "#0b0f1a",
     },
     emptyTitle: {
         fontSize: 22,
         fontWeight: "bold",
-        color: "#2C3E50",
+        color: "#f1f5f9",
         marginTop: 20,
         marginBottom: 8,
     },
     emptySubtitle: {
         fontSize: 15,
-        color: "#7F8C8D",
+        color: "#94a3b8",
         textAlign: "center",
         marginBottom: 30,
     },
     shopButton: {
-        backgroundColor: "#3498DB",
+        backgroundColor: "#ea580c",
         paddingHorizontal: 30,
         paddingVertical: 14,
         borderRadius: 25,
@@ -338,7 +339,7 @@ const styles = StyleSheet.create({
         bottom: 0,
         left: 0,
         right: 0,
-        backgroundColor: "white",
+        backgroundColor: "#131927",
         paddingHorizontal: 20,
         paddingTop: 16,
         paddingBottom: Platform.OS === "ios" ? 28 : 18,
@@ -358,7 +359,7 @@ const styles = StyleSheet.create({
         paddingTop: 8,
         paddingBottom: 10,
         borderBottomWidth: 1,
-        borderBottomColor: "#E8ECEF",
+        borderBottomColor: "rgba(234, 88, 12, 0.15)",
     },
     summaryGrid: {
         marginBottom: 2,
@@ -371,23 +372,23 @@ const styles = StyleSheet.create({
     },
     summaryValue: {
         fontSize: 14,
-        color: "#374151",
+        color: "#f1f5f9",
         fontWeight: "600",
     },
     totalLabel: {
         fontSize: 14,
-        color: "#7F8C8D",
+        color: "#94a3b8",
         fontWeight: "500",
     },
     totalLabelStrong: {
         fontSize: 16,
-        color: "#111827",
+        color: "#f1f5f9",
         fontWeight: "700",
     },
     totalPrice: {
         fontSize: 26,
         fontWeight: "bold",
-        color: "#2C3E50",
+        color: "#fb923c",
     },
     totalPriceSmall: {
         fontSize: 22,
@@ -405,7 +406,7 @@ const styles = StyleSheet.create({
         flexDirection: "row",
         alignItems: "center",
         justifyContent: "center",
-        backgroundColor: "#FFE8E8",
+        backgroundColor: "rgba(255, 107, 107, 0.15)",
         paddingVertical: 14,
         borderRadius: 12,
         gap: 6,

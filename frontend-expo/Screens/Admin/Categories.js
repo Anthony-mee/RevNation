@@ -17,7 +17,7 @@ var { width } = Dimensions.get("window");
 
 const Item = ({ item, onEdit, onDelete, isDeleting }) => (
     <View style={styles.item}>
-        <Text>{item.name}</Text>
+        <Text style={{ color: "#f1f5f9" }}>{item.name}</Text>
         <View style={styles.itemActions}>
             <View>
                 <EasyButton
@@ -114,7 +114,7 @@ const Categories = () => {
     };
 
     return (
-        <View style={{ position: "relative", height: "100%" }}>
+        <View style={{ position: "relative", height: "100%", backgroundColor: "#0b0f1a" }}>
             <View style={{ marginBottom: 60 }}>
                 <FlatList
                     data={categories}
@@ -131,7 +131,7 @@ const Categories = () => {
                 />
             </View>
             <View style={styles.bottomBar}>
-                <View><Text>{editingId ? "Update Category" : "Add Category"}</Text></View>
+                <View><Text style={{ color: "#f1f5f9" }}>{editingId ? "Update Category" : "Add Category"}</Text></View>
                 <View style={{ width: width / 2.5 }}>
                     <TextInput
                         value={categoryName}
@@ -165,7 +165,7 @@ const Categories = () => {
 
 const styles = StyleSheet.create({
     bottomBar: {
-        backgroundColor: "white",
+        backgroundColor: "#131927",
         width: width,
         height: 60,
         padding: 2,
@@ -178,8 +178,12 @@ const styles = StyleSheet.create({
     },
     input: {
         height: 40,
-        borderColor: "gray",
+        borderColor: "rgba(234, 88, 12, 0.3)",
         borderWidth: 1,
+        backgroundColor: "#0b0f1a",
+        color: "#f1f5f9",
+        paddingHorizontal: 8,
+        borderRadius: 6,
     },
     item: {
         shadowColor: "#000",
@@ -189,7 +193,7 @@ const styles = StyleSheet.create({
         elevation: 1,
         padding: 5,
         margin: 5,
-        backgroundColor: "white",
+        backgroundColor: "#131927",
         flexDirection: "row",
         alignItems: "center",
         justifyContent: "space-between",

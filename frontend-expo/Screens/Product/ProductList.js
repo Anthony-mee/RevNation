@@ -33,7 +33,7 @@ const ProductList = (props) => {
         >
             <View style={{ 
                 width: isWeb && isLargeScreen ? "100%" : width / 2, 
-                backgroundColor: "#0f1729" 
+                backgroundColor: "#0b0f1a" 
             }}>
                 <ProductCard {...item} />
             </View>

@@ -12,7 +12,7 @@ const CategoryFilter = (props) => {
         <ScrollView
             bounces={true}
             horizontal={true}
-            style={{ backgroundColor: "#0f1729", paddingBottom: 8 }}
+            style={{ backgroundColor: "#0b0f1a", paddingBottom: 8 }}
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.scrollInner}
         >
@@ -83,13 +83,13 @@ const styles = StyleSheet.create({
         textTransform: "capitalize",
     },
     active: {
-        backgroundColor: "#2563eb",
+        backgroundColor: "#ea580c",
         elevation: 2,
     },
     inactive: {
-        backgroundColor: "#1a2332",
+        backgroundColor: "#131927",
         borderWidth: 1,
-        borderColor: "rgba(37, 99, 235, 0.2)",
+        borderColor: "rgba(234, 88, 12, 0.2)",
     },
 });
 

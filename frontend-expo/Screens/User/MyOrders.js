@@ -49,7 +49,7 @@ const MyOrders = () => {
     if (loading) {
         return (
             <View style={styles.center}>
-                <Text style={{ color: "#1a1a1a", fontSize: 16 }}>Loading orders...</Text>
+                <Text style={{ color: "#f1f5f9", fontSize: 16 }}>Loading orders...</Text>
             </View>
         );
     }
@@ -57,7 +57,7 @@ const MyOrders = () => {
     if (!orderList.length) {
         return (
             <View style={styles.center}>
-                <Text style={{ color: "#1a1a1a", fontSize: 16 }}>No orders yet.</Text>
+                <Text style={{ color: "#f1f5f9", fontSize: 16 }}>No orders yet.</Text>
             </View>
         );
     }
@@ -74,8 +74,8 @@ const MyOrders = () => {
 };
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: "#f5f5f5" },
-    center: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#f5f5f5" },
+    container: { flex: 1, backgroundColor: "#0b0f1a" },
+    center: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#0b0f1a" },
 });
 
 export default MyOrders;

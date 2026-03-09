@@ -249,15 +249,15 @@ const ProductsScreen = () => {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: "#0a1628",
+        backgroundColor: "#0b0f1a",
     },
     header: {
-        backgroundColor: "#1a2332",
+        backgroundColor: "#131927",
         paddingHorizontal: 16,
         paddingTop: 12,
         paddingBottom: 12,
         borderBottomWidth: 1,
-        borderBottomColor: "rgba(37, 99, 235, 0.15)",
+        borderBottomColor: "rgba(234, 88, 12, 0.15)",
     },
     headerTop: {
         flexDirection: "row",
@@ -286,12 +286,12 @@ const styles = StyleSheet.create({
         borderRadius: 6,
     },
     viewButtonActive: {
-        backgroundColor: "#2563eb",
+        backgroundColor: "#ea580c",
     },
     searchBar: {
         marginBottom: 12,
         elevation: 0,
-        backgroundColor: "#0f1729",
+        backgroundColor: "#0b0f1a",
         borderRadius: 12,
     },
     searchInput: {
@@ -300,7 +300,7 @@ const styles = StyleSheet.create({
     },
     addProductButton: {
         marginBottom: 12,
-        backgroundColor: "#2563eb",
+        backgroundColor: "#ea580c",
         borderRadius: 10,
         paddingVertical: 10,
         paddingHorizontal: 14,
@@ -325,14 +325,14 @@ const styles = StyleSheet.create({
         paddingHorizontal: 16,
         paddingVertical: 10,
         borderRadius: 20,
-        backgroundColor: "rgba(37, 99, 235, 0.15)",
+        backgroundColor: "rgba(234, 88, 12, 0.15)",
         borderWidth: 1,
-        borderColor: "rgba(37, 99, 235, 0.3)",
+        borderColor: "rgba(234, 88, 12, 0.3)",
         marginRight: 8,
     },
     categoryChipActive: {
-        backgroundColor: "#2563eb",
-        borderColor: "#2563eb",
+        backgroundColor: "#ea580c",
+        borderColor: "#ea580c",
     },
     categoryChipText: {
         fontSize: 14,
@@ -346,7 +346,7 @@ const styles = StyleSheet.create({
         flex: 1,
         justifyContent: "center",
         alignItems: "center",
-        backgroundColor: "#0a1628",
+        backgroundColor: "#0b0f1a",
     },
     loadingText: {
         marginTop: 12,
@@ -355,7 +355,7 @@ const styles = StyleSheet.create({
     },
     productsScroll: {
         flex: 1,
-        backgroundColor: "#0a1628",
+        backgroundColor: "#0b0f1a",
     },
     productsContainer: {
         padding: 12,
@@ -382,7 +382,7 @@ const styles = StyleSheet.create({
         justifyContent: "center",
         alignItems: "center",
         paddingHorizontal: 40,
-        backgroundColor: "#0a1628",
+        backgroundColor: "#0b0f1a",
     },
     emptyTitle: {
         fontSize: 22,
@@ -398,7 +398,7 @@ const styles = StyleSheet.create({
         marginBottom: 24,
     },
     resetButton: {
-        backgroundColor: "#2563eb",
+        backgroundColor: "#ea580c",
         paddingHorizontal: 24,
         paddingVertical: 12,
         borderRadius: 20,

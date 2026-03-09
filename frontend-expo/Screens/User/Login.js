@@ -47,7 +47,7 @@ const Login = () => {
 
     useEffect(() => {
         if (context.stateUser.isAuthenticated === true) {
-            navigation.navigate("User Profile");
+            navigation.navigate("Home", { screen: "Main" });
         }
     }, [context.stateUser.isAuthenticated]);
 
@@ -177,7 +177,7 @@ const styles = StyleSheet.create({
         width: "100%",
         paddingHorizontal: 24,
         paddingVertical: 32,
-        backgroundColor: "#0f1729",
+        backgroundColor: "#131927",
         borderRadius: 24,
         marginBottom: 20,
         elevation: 2,
@@ -207,7 +207,7 @@ const styles = StyleSheet.create({
     },
     loadingText: {
         marginLeft: 8,
-        color: "#60a5fa",
+        color: "#3b82f6",
         fontSize: 14,
     },
     errorText: {
@@ -219,13 +219,13 @@ const styles = StyleSheet.create({
     loginButton: {
         width: "100%",
         height: 52,
-        backgroundColor: "#2563eb",
+        backgroundColor: "#ea580c",
         borderRadius: 12,
         justifyContent: "center",
         alignItems: "center",
         marginTop: 8,
         elevation: 3,
-        shadowColor: "#2563eb",
+        shadowColor: "#ea580c",
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.3,
         shadowRadius: 8,
@@ -237,7 +237,7 @@ const styles = StyleSheet.create({
         letterSpacing: 1,
     },
     buttonDisabled: {
-        backgroundColor: "#1e40af",
+        backgroundColor: "#60a5fa",
         opacity: 0.6,
     },
     divider: {
@@ -303,12 +303,12 @@ const styles = StyleSheet.create({
         backgroundColor: "transparent",
         borderRadius: 12,
         borderWidth: 2,
-        borderColor: "#2563eb",
+        borderColor: "#ea580c",
         justifyContent: "center",
         alignItems: "center",
     },
     registerButtonText: {
-        color: "#60a5fa",
+        color: "#fb923c",
         fontSize: 16,
         fontWeight: "700",
         letterSpacing: 1,

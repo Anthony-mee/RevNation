@@ -35,6 +35,7 @@ const styles = StyleSheet.create({
     container: {
         position: "relative",
         height: "100%",
+        backgroundColor: "#0b0f1a",
     },
     image: {
         width: "100%",
@@ -48,15 +49,19 @@ const styles = StyleSheet.create({
     contentHeader: {
         fontWeight: "bold",
         marginBottom: 20,
+        color: "#f1f5f9",
+        fontSize: 20,
     },
     contentText: {
         fontSize: 18,
         fontWeight: "bold",
         marginBottom: 20,
+        color: "#fb923c",
     },
     availabilityContainer: {
         marginBottom: 20,
         alignItems: "center",
+        paddingHorizontal: 16,
     },
 });
 

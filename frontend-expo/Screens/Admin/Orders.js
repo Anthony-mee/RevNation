@@ -31,7 +31,7 @@ const Orders = () => {
     );
 
     return (
-        <View>
+        <View style={{ flex: 1, backgroundColor: "#0b0f1a" }}>
             <FlatList
                 data={orderList}
                 renderItem={({ item }) => <OrderCard item={item} update={true} isAdmin={true} />}

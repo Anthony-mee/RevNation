@@ -1,8 +1,11 @@
 import React, { useContext, useState, useCallback } from "react";
-import { View, Text, ScrollView, Button, StyleSheet, TouchableOpacity } from "react-native";
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Image, ActivityIndicator, Alert } from "react-native";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
+import * as ImagePicker from "expo-image-picker";
+import * as ImageManipulator from "expo-image-manipulator";
+import { Ionicons } from "@expo/vector-icons";
 import baseURL from "../../assets/common/baseurl";
 import AuthGlobal from "../../Context/Store/AuthGlobal";
 import { logoutUser } from "../../Context/Actions/Auth.actions";
@@ -23,6 +26,8 @@ const UserProfile = () => {
     const [deliveryLocation, setDeliveryLocation] = useState(null);
     const [mapVisible, setMapVisible] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
+    const [profileImage, setProfileImage] = useState("");
+    const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
     const navigation = useNavigation();
 
     const requiredProfileFields = {
@@ -46,6 +51,7 @@ const UserProfile = () => {
         setDeliveryCity(profile?.deliveryCity || "");
         setDeliveryZip(profile?.deliveryZip || "");
         setDeliveryCountry(profile?.deliveryCountry || "Philippines");
+        setProfileImage(profile?.image || "");
         if (
             Number.isFinite(profile?.deliveryLocation?.latitude)
             && Number.isFinite(profile?.deliveryLocation?.longitude)
@@ -74,9 +80,18 @@ const UserProfile = () => {
                         .get(`${baseURL}users/${context.stateUser.user.userId}`, {
                             headers: { Authorization: `Bearer ${res}` },
                         })
-                        .then((user) => hydrateProfileForm(user.data));
+                        .then((user) => {
+                            console.log("[UserProfile] Profile loaded:", {
+                                name: user.data.name,
+                                email: user.data.email,
+                                image: user.data.image,
+                                phone: user.data.phone,
+                            });
+                            hydrateProfileForm(user.data);
+                        })
+                        .catch((error) => console.error("[UserProfile] Load error:", error.message));
                 })
-                .catch((error) => console.log(error));
+                .catch((error) => console.error("[UserProfile] Auth error:", error.message));
             return () => setUserProfile("");
         }, [context.stateUser.isAuthenticated])
     );
@@ -129,59 +144,312 @@ const UserProfile = () => {
         }
     };
 
+    const handlePhotoSelect = () => {
+        Alert.alert(
+            "Update Profile Photo",
+            "Choose an option",
+            [
+                { text: "Take Photo", onPress: takePhoto },
+                { text: "Choose from Library", onPress: pickImage },
+                { text: "Cancel", style: "cancel" }
+            ],
+            { cancelable: true }
+        );
+    };
+
+    const takePhoto = async () => {
+        try {
+            const { status } = await ImagePicker.requestCameraPermissionsAsync();
+            if (status !== "granted") {
+                Toast.show({
+                    topOffset: 60,
+                    type: "error",
+                    text1: "Permission denied",
+                    text2: "Camera access is required"
+                });
+                return;
+            }
+
+            const result = await ImagePicker.launchCameraAsync({
+                allowsEditing: true,
+                aspect: [1, 1],
+                quality: 0.8,
+            });
+
+            if (!result.canceled) {
+                await uploadPhoto(result.assets[0].uri);
+            }
+        } catch (error) {
+            Toast.show({
+                topOffset: 60,
+                type: "error",
+                text1: "Error",
+                text2: "Failed to take photo"
+            });
+        }
+    };
+
+    const pickImage = async () => {
+        try {
+            const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+            if (status !== "granted") {
+                Toast.show({
+                    topOffset: 60,
+                    type: "error",
+                    text1: "Permission denied",
+                    text2: "Photo library access is required"
+                });
+                return;
+            }
+
+            const result = await ImagePicker.launchImageLibraryAsync({
+                mediaTypes: ["images"],
+                allowsEditing: true,
+                aspect: [1, 1],
+                quality: 0.8,
+            });
+
+            if (!result.canceled) {
+                await uploadPhoto(result.assets[0].uri);
+            }
+        } catch (error) {
+            Toast.show({
+                topOffset: 60,
+                type: "error",
+                text1: "Error",
+                text2: "Failed to pick image"
+            });
+        }
+    };
+
+    const uploadPhoto = async (uri) => {
+        try {
+            setIsUploadingPhoto(true);
+            const jwt = await AsyncStorage.getItem("jwt");
+            if (!jwt) {
+                Toast.show({ topOffset: 60, type: "error", text1: "Session expired" });
+                setIsUploadingPhoto(false);
+                return;
+            }
+
+            console.log("[uploadPhoto] Starting upload with URI:", uri);
+            
+            // Resize and convert to base64
+            const manipResult = await ImageManipulator.manipulateAsync(
+                uri,
+                [{ resize: { width: 800 } }],
+                { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG, base64: true }
+            );
+
+            const fileName = uri.split("/").pop() || "photo.jpg";
+            
+            console.log("[uploadPhoto] Uploading to:", `${baseURL}users/profile/photo-base64`);
+
+            const response = await axios.post(`${baseURL}users/profile/photo-base64`, 
+                {
+                    imageBase64: manipResult.base64,
+                    fileName: fileName
+                },
+                {
+                    headers: {
+                        Authorization: `Bearer ${jwt}`,
+                        "Content-Type": "application/json",
+                    },
+                    timeout: 30000,
+                }
+            );
+
+            console.log("[uploadPhoto] Upload successful:", response.data);
+            setProfileImage(response.data.image);
+            Toast.show({
+                topOffset: 60,
+                type: "success",
+                text1: "Photo updated successfully"
+            });
+        } catch (error) {
+            console.error("[uploadPhoto] Error:", error.message, error.response?.data);
+            Toast.show({
+                topOffset: 60,
+                type: "error",
+                text1: "Failed to upload photo",
+                text2: error.response?.data?.message || error.message
+            });
+        } finally {
+            setIsUploadingPhoto(false);
+        }
+    };
+
     return (
         <View style={styles.container}>
-            <ScrollView contentContainerStyle={styles.subContainer}>
-                <Text style={{ fontSize: 28, fontWeight: "700", color: "#1a1a1a" }}>
-                    {userProfile ? userProfile.name : ""}
-                </Text>
-                {userProfile && userProfile.isAdmin ? (
-                    <View style={styles.adminBadge}>
-                        <Text style={styles.adminBadgeText}>ADMIN</Text>
+            <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+                {/* Profile Header Card */}
+                <View style={styles.profileHeader}>
+                    <View style={styles.avatarContainer}>
+                        <TouchableOpacity onPress={handlePhotoSelect} activeOpacity={0.8}>
+                            {profileImage ? (
+                                <Image source={{ uri: profileImage }} style={styles.avatar} />
+                            ) : (
+                                <View style={styles.avatarPlaceholder}>
+                                    <Ionicons name="person" size={60} color="#94a3b8" />
+                                </View>
+                            )}
+                            <View style={styles.cameraButton}>
+                                {isUploadingPhoto ? (
+                                    <ActivityIndicator size="small" color="#fff" />
+                                ) : (
+                                    <Ionicons name="camera" size={18} color="#fff" />
+                                )}
+                            </View>
+                        </TouchableOpacity>
                     </View>
-                ) : null}
-                <View style={[styles.completionBadge, isCheckoutReady ? styles.completeBadge : styles.incompleteBadge]}>
-                    <Text style={styles.completionBadgeText}>
-                        {isCheckoutReady ? "✓ Checkout Ready" : "⚠ Profile Incomplete"}
-                    </Text>
+                    
+                    <Text style={styles.userName}>{name || "User Name"}</Text>
+                    <Text style={styles.userEmail}>{userProfile?.email || ""}</Text>
+                    
+                    <View style={styles.badgesRow}>
+                        {userProfile?.isAdmin && (
+                            <View style={styles.adminBadge}>
+                                <Ionicons name="shield-checkmark" size={14} color="#fff" />
+                                <Text style={styles.adminBadgeText}>ADMIN</Text>
+                            </View>
+                        )}
+                        <View style={[styles.statusBadge, isCheckoutReady ? styles.completeBadge : styles.incompleteBadge]}>
+                            <Ionicons 
+                                name={isCheckoutReady ? "checkmark-circle" : "alert-circle"} 
+                                size={14} 
+                                color="#fff" 
+                            />
+                            <Text style={styles.statusBadgeText}>
+                                {isCheckoutReady ? "Checkout Ready" : "Incomplete"}
+                            </Text>
+                        </View>
+                    </View>
                 </View>
-                {!isCheckoutReady ? (
-                    <Text style={styles.missingFieldsText}>
-                        Missing: {missingRequiredFields.join(", ")}
-                    </Text>
-                ) : null}
-                <View style={{ marginTop: 20, width: "100%", alignItems: "center" }}>
-                    <Text style={styles.sectionHeader}>Account Info</Text>
-                    <Text style={styles.emailText}>
-                        {userProfile ? userProfile.email : ""}
-                    </Text>
-                    <Input label="Name" placeholder="Your name" value={name} onChangeText={setName} />
-                    <Input label="Phone" placeholder="Your phone number" value={phone} keyboardType="numeric" onChangeText={setPhone} />
 
-                    <Text style={styles.sectionHeader}>Delivery Address</Text>
-                    <Input label="Address Line 1" placeholder="Street, building, etc." value={deliveryAddress1} onChangeText={setDeliveryAddress1} />
-                    <Input label="Address Line 2 (optional)" placeholder="Unit, floor, etc." value={deliveryAddress2} onChangeText={setDeliveryAddress2} />
-                    <Input label="City" placeholder="City or municipality" value={deliveryCity} onChangeText={setDeliveryCity} />
-                    <Input label="Zip Code" placeholder="Postal/Zip code" value={deliveryZip} keyboardType="numeric" onChangeText={setDeliveryZip} />
-                    <Input label="Country" placeholder="Country" value={deliveryCountry} onChangeText={setDeliveryCountry} />
-                    <TouchableOpacity style={styles.mapButton} onPress={() => setMapVisible(true)}>
-                        <Text style={styles.mapButtonText}>📍 Set Address from Map</Text>
-                    </TouchableOpacity>
-                    <View style={{ width: "88%", marginTop: 8 }}>
-                        <Button title={isSaving ? "Saving..." : "Save Profile"} disabled={isSaving} onPress={saveProfile} />
+                {/* Account Information Card */}
+                <View style={styles.card}>
+                    <View style={styles.cardHeader}>
+                        <Ionicons name="person-circle-outline" size={22} color="#ffffff" />
+                        <Text style={styles.cardTitle}>Account Information</Text>
+                    </View>
+                    <View style={styles.cardContent}>
+                        <Input 
+                            label="Full Name" 
+                            placeholder="Enter your name" 
+                            value={name} 
+                            onChangeText={setName}
+                        />
+                        <Input 
+                            label="Phone Number" 
+                            placeholder="Enter phone number" 
+                            value={phone} 
+                            keyboardType="phone-pad" 
+                            onChangeText={setPhone}
+                        />
                     </View>
                 </View>
-                <View style={{ marginTop: 30, width: "88%" }}>
-                    <Button
-                        title="Sign Out"
-                        color="#d32f2f"
+
+                {/* Delivery Address Card */}
+                <View style={styles.card}>
+                    <View style={styles.cardHeader}>
+                        <Ionicons name="location-outline" size={22} color="#ffffff" />
+                        <Text style={styles.cardTitle}>Delivery Address</Text>
+                    </View>
+                    <View style={styles.cardContent}>
+                        <Input 
+                            label="Address Line 1" 
+                            placeholder="Street, building number" 
+                            value={deliveryAddress1} 
+                            onChangeText={setDeliveryAddress1}
+                        />
+                        <Input 
+                            label="Address Line 2 (Optional)" 
+                            placeholder="Unit, floor, etc." 
+                            value={deliveryAddress2} 
+                            onChangeText={setDeliveryAddress2}
+                        />
+                        <View style={styles.row}>
+                            <View style={styles.halfWidth}>
+                                <Input 
+                                    label="City" 
+                                    placeholder="City" 
+                                    value={deliveryCity} 
+                                    onChangeText={setDeliveryCity}
+                                />
+                            </View>
+                            <View style={styles.halfWidth}>
+                                <Input 
+                                    label="Zip Code" 
+                                    placeholder="Postal code" 
+                                    value={deliveryZip} 
+                                    keyboardType="numeric" 
+                                    onChangeText={setDeliveryZip}
+                                />
+                            </View>
+                        </View>
+                        <Input 
+                            label="Country" 
+                            placeholder="Country" 
+                            value={deliveryCountry} 
+                            onChangeText={setDeliveryCountry}
+                        />
+                        
+                        <TouchableOpacity 
+                            style={styles.mapButton} 
+                            onPress={() => setMapVisible(true)}
+                            activeOpacity={0.8}
+                        >
+                            <Ionicons name="map" size={20} color="#fff" />
+                            <Text style={styles.mapButtonText}>Set Address from Map</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+
+                {/* Action Buttons */}
+                <View style={styles.actionsContainer}>
+                    <TouchableOpacity 
+                        style={[styles.saveButton, isSaving && styles.buttonDisabled]} 
+                        onPress={saveProfile}
+                        disabled={isSaving}
+                        activeOpacity={0.8}
+                    >
+                        {isSaving ? (
+                            <ActivityIndicator size="small" color="#fff" />
+                        ) : (
+                            <>
+                                <Ionicons name="save-outline" size={20} color="#fff" />
+                                <Text style={styles.saveButtonText}>Save Profile</Text>
+                            </>
+                        )}
+                    </TouchableOpacity>
+
+                    <TouchableOpacity 
+                        style={styles.logoutButton}
                         onPress={() => {
-                            AsyncStorage.removeItem("jwt");
-                            logoutUser(context.dispatch);
+                            Alert.alert(
+                                "Sign Out",
+                                "Are you sure you want to sign out?",
+                                [
+                                    { text: "Cancel", style: "cancel" },
+                                    {
+                                        text: "Sign Out",
+                                        onPress: () => {
+                                            AsyncStorage.removeItem("jwt");
+                                            logoutUser(context.dispatch);
+                                        },
+                                        style: "destructive"
+                                    }
+                                ]
+                            );
                         }}
-                    />
+                        activeOpacity={0.8}
+                    >
+                        <Ionicons name="log-out-outline" size={20} color="#ef4444" />
+                        <Text style={styles.logoutButtonText}>Sign Out</Text>
+                    </TouchableOpacity>
                 </View>
             </ScrollView>
+
             <AddressMapPicker
                 visible={mapVisible}
                 initialLocation={deliveryLocation}
@@ -195,77 +463,197 @@ const UserProfile = () => {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        alignItems: "center",
-        backgroundColor: "#f5f5f5",
+        backgroundColor: "#0b0f1a",
     },
-    subContainer: {
-        alignItems: "center",
-        marginTop: 20,
+    scrollContent: {
         paddingBottom: 40,
-        paddingHorizontal: 16,
+    },
+    profileHeader: {
+        backgroundColor: "#131927",
+        paddingVertical: 32,
+        paddingHorizontal: 20,
+        alignItems: "center",
+        borderBottomLeftRadius: 24,
+        borderBottomRightRadius: 24,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 8,
+        elevation: 4,
+        marginBottom: 20,
+    },
+    avatarContainer: {
+        marginBottom: 16,
+    },
+    avatar: {
+        width: 120,
+        height: 120,
+        borderRadius: 60,
+        borderWidth: 4,
+        borderColor: "#ea580c",
+    },
+    avatarPlaceholder: {
+        width: 120,
+        height: 120,
+        borderRadius: 60,
+        backgroundColor: "#1e293b",
+        justifyContent: "center",
+        alignItems: "center",
+        borderWidth: 4,
+        borderColor: "#334155",
+    },
+    cameraButton: {
+        position: "absolute",
+        bottom: 0,
+        right: 0,
+        backgroundColor: "#ea580c",
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        justifyContent: "center",
+        alignItems: "center",
+        borderWidth: 3,
+        borderColor: "#131927",
+    },
+    userName: {
+        fontSize: 24,
+        fontWeight: "700",
+        color: "#f1f5f9",
+        marginBottom: 4,
+    },
+    userEmail: {
+        fontSize: 14,
+        color: "#94a3b8",
+        marginBottom: 12,
+    },
+    badgesRow: {
+        flexDirection: "row",
+        gap: 8,
+        marginTop: 8,
     },
     adminBadge: {
-        backgroundColor: "#e91e63",
-        borderRadius: 12,
-        paddingHorizontal: 14,
-        paddingVertical: 4,
-        marginTop: 8,
+        flexDirection: "row",
+        alignItems: "center",
+        backgroundColor: "#ea580c",
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 16,
+        gap: 4,
     },
     adminBadgeText: {
-        color: "white",
-        fontWeight: "bold",
-        fontSize: 13,
-        letterSpacing: 1,
+        color: "#fff",
+        fontSize: 12,
+        fontWeight: "700",
+        letterSpacing: 0.5,
     },
-    mapButton: {
-        backgroundColor: "#1976d2",
-        marginHorizontal: 10,
-        marginVertical: 10,
-        paddingVertical: 10,
-        borderRadius: 8,
+    statusBadge: {
+        flexDirection: "row",
         alignItems: "center",
-    },
-    mapButtonText: {
-        color: "white",
-        fontWeight: "600",
-    },
-    completionBadge: {
-        borderRadius: 12,
-        paddingHorizontal: 14,
+        paddingHorizontal: 12,
         paddingVertical: 6,
-        marginTop: 12,
+        borderRadius: 16,
+        gap: 4,
     },
     completeBadge: {
-        backgroundColor: "#2e7d32",
+        backgroundColor: "#16a34a",
     },
     incompleteBadge: {
-        backgroundColor: "#d32f2f",
+        backgroundColor: "#ea580c",
     },
-    completionBadgeText: {
-        color: "white",
-        fontWeight: "700",
-        letterSpacing: 0.4,
-    },
-    missingFieldsText: {
-        marginTop: 8,
-        color: "#b71c1c",
+    statusBadgeText: {
+        color: "#fff",
         fontSize: 12,
-        marginHorizontal: 16,
-        textAlign: "center",
+        fontWeight: "600",
     },
-    sectionHeader: {
+    card: {
+        backgroundColor: "#131927",
+        marginHorizontal: 16,
+        marginBottom: 16,
+        borderRadius: 16,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 2,
+        overflow: "hidden",
+    },
+    cardHeader: {
+        flexDirection: "row",
+        alignItems: "center",
+        paddingHorizontal: 20,
+        paddingVertical: 16,
+        backgroundColor: "#ea580c",
+        borderBottomWidth: 0,
+        gap: 10,
+    },
+    cardTitle: {
+        fontSize: 17,
+        fontWeight: "700",
+        color: "#ffffff",
+    },
+    cardContent: {
+        paddingHorizontal: 20,
+        paddingVertical: 16,
+    },
+    row: {
+        flexDirection: "row",
+        gap: 12,
+    },
+    halfWidth: {
+        flex: 1,
+    },
+    mapButton: {
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: "#ea580c",
+        paddingVertical: 14,
+        borderRadius: 12,
+        marginTop: 8,
+        gap: 8,
+    },
+    mapButtonText: {
+        color: "#fff",
+        fontSize: 15,
+        fontWeight: "600",
+    },
+    actionsContainer: {
+        paddingHorizontal: 16,
+        marginTop: 8,
+        gap: 12,
+    },
+    saveButton: {
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: "#ea580c",
+        paddingVertical: 16,
+        borderRadius: 12,
+        gap: 8,
+    },
+    saveButtonText: {
+        color: "#fff",
         fontSize: 16,
         fontWeight: "700",
-        color: "#333",
-        alignSelf: "flex-start",
-        marginLeft: "6%",
-        marginTop: 20,
-        marginBottom: 6,
     },
-    emailText: {
-        fontSize: 15,
-        color: "#555",
-        marginBottom: 4,
+    logoutButton: {
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: "#131927",
+        paddingVertical: 16,
+        borderRadius: 12,
+        borderWidth: 2,
+        borderColor: "#ef4444",
+        gap: 8,
+    },
+    logoutButtonText: {
+        color: "#ef4444",
+        fontSize: 16,
+        fontWeight: "700",
+    },
+    buttonDisabled: {
+        opacity: 0.6,
     },
 });
 

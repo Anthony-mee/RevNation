@@ -70,7 +70,7 @@ const ListItem = ({ item, index, deleteProduct, isDeleting = false }) => {
                 style={[
                     styles.container,
                     {
-                        backgroundColor: index % 2 === 0 ? "white" : "gainsboro",
+                        backgroundColor: index % 2 === 0 ? "#131927" : "#0b0f1a",
                     },
                 ]}
             >
@@ -92,7 +92,7 @@ const ListItem = ({ item, index, deleteProduct, isDeleting = false }) => {
                         style={styles.actionButton}
                         onPress={() => navigation.navigate("ProductForm", { item })}
                     >
-                        <Ionicons name="create-outline" size={18} color="#333" />
+                        <Ionicons name="create-outline" size={18} color="#fb923c" />
                     </TouchableOpacity>
                     <TouchableOpacity
                         style={styles.actionButton}
@@ -126,6 +126,7 @@ const styles = StyleSheet.create({
         flexWrap: "wrap",
         margin: 3,
         width: width / 6,
+        color: "#f1f5f9",
     },
     actions: {
         flexDirection: "row",
@@ -144,7 +145,7 @@ const styles = StyleSheet.create({
     },
     modalView: {
         margin: 20,
-        backgroundColor: "white",
+        backgroundColor: "#131927",
         borderRadius: 20,
         padding: 35,
         alignItems: "center",

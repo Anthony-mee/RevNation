@@ -12,8 +12,11 @@ import { useNavigation } from "@react-navigation/native";
 import { Badge } from "react-native-paper";
 import { useSelector } from "react-redux";
 import { Ionicons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import axios from "axios";
 import AuthGlobal from "../Context/Store/AuthGlobal";
 import { logoutUser } from "../Context/Actions/Auth.actions";
+import baseURL from "../assets/common/baseurl";
 
 const { width } = Dimensions.get("window");
 
@@ -24,6 +27,7 @@ const WebNavBar = () => {
     const [menuOpen, setMenuOpen] = useState(false);
     const [productsDropdownOpen, setProductsDropdownOpen] = useState(false);
     const [screenWidth, setScreenWidth] = useState(width);
+    const [userProfile, setUserProfile] = useState(null);
 
     useEffect(() => {
         const subscription = Dimensions.addEventListener("change", ({ window }) => {
@@ -31,6 +35,23 @@ const WebNavBar = () => {
         });
         return () => subscription?.remove();
     }, []);
+
+    // Fetch user profile data including image
+    useEffect(() => {
+        if (context.stateUser.isAuthenticated && context.stateUser.user.userId) {
+            AsyncStorage.getItem("jwt")
+                .then((jwt) => {
+                    axios.get(`${baseURL}users/${context.stateUser.user.userId}`, {
+                        headers: { Authorization: `Bearer ${jwt}` },
+                    })
+                    .then((response) => setUserProfile(response.data))
+                    .catch((error) => console.log("[WebNavBar] Error fetching profile:", error));
+                })
+                .catch((error) => console.log("[WebNavBar] Auth error:", error));
+        } else {
+            setUserProfile(null);
+        }
+    }, [context.stateUser.isAuthenticated, context.stateUser.user.userId]);
 
     const isMobile = screenWidth < 768;
 
@@ -154,10 +175,20 @@ const WebNavBar = () => {
                             {context.stateUser.isAuthenticated ? (
                                 <View style={styles.userMenu}>
                                     <TouchableOpacity
-                                        style={styles.navButton}
+                                        style={styles.profileButton}
                                         onPress={() => navigation.navigate("User", { screen: "User Profile" })}
                                     >
-                                        <Text style={styles.navButtonText}>
+                                        {userProfile?.image ? (
+                                            <Image 
+                                                source={{ uri: userProfile.image }} 
+                                                style={styles.profileAvatar}
+                                            />
+                                        ) : (
+                                            <View style={styles.profileAvatarPlaceholder}>
+                                                <Ionicons name="person" size={16} color="#6b7280" />
+                                            </View>
+                                        )}
+                                        <Text style={styles.profileName}>
                                             {context.stateUser.user.name || "Profile"}
                                         </Text>
                                     </TouchableOpacity>
@@ -181,28 +212,9 @@ const WebNavBar = () => {
                         </View>
                     )}
 
-                    {/* Mobile Hamburger Menu */}
+                    {/* Mobile Layout: Left (Drawer) | Right (Profile + Cart) */}
                     {isMobile && (
-                        <View style={styles.mobileActions}>
-                            <TouchableOpacity 
-                                style={[styles.cartButton, styles.mobileIconButton]}
-                                onPress={() => navigation.navigate("Cart Screen")}
-                            >
-                                <Ionicons name="cart-outline" size={20} color="#ffffff" />
-                                {cartItems.length > 0 && (
-                                    <Badge style={styles.badge} size={20}>
-                                        {cartItems.length}
-                                    </Badge>
-                                )}
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                                style={styles.mobileLoginButton}
-                                onPress={() => navigation.navigate("User", { screen: context.stateUser.isAuthenticated ? "User Profile" : "Login" })}
-                            >
-                                <Text style={styles.mobileLoginButtonText}>
-                                    {context.stateUser.isAuthenticated ? "Profile" : "Login"}
-                                </Text>
-                            </TouchableOpacity>
+                        <View style={styles.mobileBar}>
                             <TouchableOpacity
                                 style={[styles.hamburgerButton, styles.mobileIconButton]}
                                 onPress={() => setMenuOpen(!menuOpen)}
@@ -213,6 +225,46 @@ const WebNavBar = () => {
                                     color="#ffffff"
                                 />
                             </TouchableOpacity>
+                            <View style={styles.mobileRightActions}>
+                                <TouchableOpacity 
+                                    style={[styles.cartButton, styles.mobileIconButton]}
+                                    onPress={() => navigation.navigate("Cart Screen")}
+                                >
+                                    <Ionicons name="cart-outline" size={20} color="#ffffff" />
+                                    {cartItems.length > 0 && (
+                                        <Badge style={styles.badge} size={20}>
+                                            {cartItems.length}
+                                        </Badge>
+                                    )}
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    style={styles.mobileProfileRow}
+                                    onPress={() => navigation.navigate("User", { screen: context.stateUser.isAuthenticated ? "User Profile" : "Login" })}
+                                >
+                                    <View style={styles.mobileUserInfo}>
+                                        <Text style={styles.mobileUserName} numberOfLines={1}>
+                                            {context.stateUser.isAuthenticated
+                                                ? (userProfile?.name || context.stateUser.user.name || "User")
+                                                : "Guest"}
+                                        </Text>
+                                        <Text style={styles.mobileUserRole} numberOfLines={1}>
+                                            {context.stateUser.isAuthenticated
+                                                ? (context.stateUser.user.isAdmin ? "Admin" : "Customer")
+                                                : "Sign in"}
+                                        </Text>
+                                    </View>
+                                    {context.stateUser.isAuthenticated && userProfile?.image ? (
+                                        <Image
+                                            source={{ uri: userProfile.image }}
+                                            style={styles.mobileProfileAvatar}
+                                        />
+                                    ) : (
+                                        <View style={styles.mobileProfileAvatarPlaceholder}>
+                                            <Ionicons name="person" size={18} color="#ffffff" />
+                                        </View>
+                                    )}
+                                </TouchableOpacity>
+                            </View>
                         </View>
                     )}
                 </View>
@@ -326,10 +378,8 @@ const styles = StyleSheet.create({
         zIndex: 1000,
     },
     rootMobile: {
-        position: "absolute",
-        top: 0,
-        left: 0,
-        right: 0,
+        position: "relative",
+        zIndex: 1001,
     },
     navbar: {
         backgroundColor: "#ffffff",
@@ -343,10 +393,14 @@ const styles = StyleSheet.create({
         zIndex: 1000,
     },
     navbarMobile: {
-        backgroundColor: "transparent",
+        backgroundColor: "#0a1628",
         borderBottomWidth: 0,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 0 },
         shadowOpacity: 0,
+        shadowRadius: 0,
         elevation: 0,
+        zIndex: 1001,
     },
     navContainer: {
         flexDirection: "row",
@@ -361,8 +415,9 @@ const styles = StyleSheet.create({
     navContainerMobile: {
         paddingHorizontal: 12,
         paddingTop: StatusBar.currentHeight ? StatusBar.currentHeight + 8 : 16,
-        paddingBottom: 8,
-        justifyContent: "flex-end",
+        paddingBottom: 12,
+        justifyContent: "center",
+        alignItems: "center",
     },
     logoContainer: {
         marginRight: 40,
@@ -436,10 +491,35 @@ const styles = StyleSheet.create({
         alignItems: "center",
         gap: 16,
     },
-    mobileActions: {
+    mobileBar: {
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "space-between",
+        width: "100%",
+    },
+    mobileRightActions: {
         flexDirection: "row",
         alignItems: "center",
         gap: 8,
+    },
+    mobileProfileRow: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 8,
+    },
+    mobileUserInfo: {
+        alignItems: "flex-end",
+        maxWidth: 100,
+    },
+    mobileUserName: {
+        fontSize: 12,
+        fontWeight: "700",
+        color: "#ffffff",
+    },
+    mobileUserRole: {
+        fontSize: 10,
+        fontWeight: "500",
+        color: "rgba(255, 255, 255, 0.7)",
     },
     mobileLoginButton: {
         backgroundColor: "#2563eb",
@@ -459,9 +539,9 @@ const styles = StyleSheet.create({
         marginRight: 0,
     },
     mobileIconButton: {
-        backgroundColor: "rgba(148, 163, 184, 0.2)",
+        backgroundColor: "rgba(255, 255, 255, 0.2)",
         borderWidth: 1,
-        borderColor: "rgba(148, 163, 184, 0.35)",
+        borderColor: "rgba(255, 255, 255, 0.3)",
         borderRadius: 8,
     },
     cartIcon: {
@@ -477,7 +557,13 @@ const styles = StyleSheet.create({
         padding: 6,
     },
     mobileMenuFloating: {
+        position: "absolute",
+        top: "100%",
+        left: 0,
+        right: 0,
         paddingHorizontal: 12,
+        zIndex: 1002,
+        elevation: 10,
     },
     mobileMenu: {
         backgroundColor: "#111827",
@@ -485,9 +571,13 @@ const styles = StyleSheet.create({
         borderBottomColor: "#1f2937",
         paddingVertical: 10,
         paddingHorizontal: 12,
-        zIndex: 999,
-        elevation: 2,
+        zIndex: 1002,
+        elevation: 10,
         borderRadius: 12,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
     },
     mobileMenuLink: {
         paddingVertical: 12,
@@ -551,6 +641,76 @@ const styles = StyleSheet.create({
         fontWeight: "600",
         color: "#ffffff",
         letterSpacing: 0.5,
+    },
+    profileButton: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 10,
+        paddingVertical: 6,
+        paddingHorizontal: 12,
+        borderRadius: 8,
+        backgroundColor: "#f3f4f6",
+    },
+    profileAvatar: {
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        borderWidth: 2,
+        borderColor: "#3b82f6",
+    },
+    profileAvatarPlaceholder: {
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        backgroundColor: "#e5e7eb",
+        justifyContent: "center",
+        alignItems: "center",
+        borderWidth: 2,
+        borderColor: "#d1d5db",
+    },
+    profileName: {
+        fontSize: 14,
+        fontWeight: "500",
+        color: "#374151",
+    },
+    mobileProfileButton: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        justifyContent: "center",
+        alignItems: "center",
+        marginLeft: 0,
+    },
+    mobileProfileContainer: {
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 2,
+        minHeight: 60,
+    },
+    mobileProfileName: {
+        fontSize: 9,
+        fontWeight: "700",
+        color: "#ffffff",
+        marginTop: 2,
+        textAlign: "center",
+    },
+    mobileProfileAvatar: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        borderWidth: 2,
+        borderColor: "#ffffff",
+    },
+    mobileProfileAvatarPlaceholder: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: "rgba(255, 255, 255, 0.3)",
+        justifyContent: "center",
+        alignItems: "center",
+        borderWidth: 2,
+        borderColor: "#ffffff",
     },
 });
 

@@ -37,7 +37,7 @@ const Main = () => {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: "#ffffff",
+        backgroundColor: "#0b0f1a",
     },
 });
 

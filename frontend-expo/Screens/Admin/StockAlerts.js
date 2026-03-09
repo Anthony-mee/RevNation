@@ -42,7 +42,7 @@ const StockAlerts = () => {
         <View style={styles.container}>
             {alerts.length === 0 ? (
                 <View style={styles.center}>
-                    <Text>No stock alerts.</Text>
+                    <Text style={{ color: "#f1f5f9" }}>No stock alerts.</Text>
                 </View>
             ) : (
                 <FlatList
@@ -52,10 +52,10 @@ const StockAlerts = () => {
                     renderItem={({ item }) => (
                         <View style={styles.card}>
                             <Text style={styles.title}>{item.product?.name || "Unknown product"}</Text>
-                            <Text>Type: {item.type}</Text>
-                            <Text>Stock: {item.countInStock}</Text>
-                            <Text>Threshold: {item.threshold}</Text>
-                            <Text>Status: {item.resolved ? "resolved" : "active"}</Text>
+                            <Text style={{ color: "#94a3b8" }}>Type: {item.type}</Text>
+                            <Text style={{ color: "#94a3b8" }}>Stock: {item.countInStock}</Text>
+                            <Text style={{ color: "#94a3b8" }}>Threshold: {item.threshold}</Text>
+                            <Text style={{ color: "#94a3b8" }}>Status: {item.resolved ? "resolved" : "active"}</Text>
                         </View>
                     )}
                 />
@@ -65,16 +65,16 @@ const StockAlerts = () => {
 };
 
 const styles = StyleSheet.create({
-    container: { flex: 1, padding: 12 },
+    container: { flex: 1, padding: 12, backgroundColor: "#0b0f1a" },
     center: { flex: 1, alignItems: "center", justifyContent: "center" },
     card: {
-        backgroundColor: "white",
+        backgroundColor: "#131927",
         padding: 12,
         borderRadius: 8,
         marginBottom: 10,
         elevation: 2,
     },
-    title: { fontWeight: "700", marginBottom: 4 },
+    title: { fontWeight: "700", marginBottom: 4, color: "#f1f5f9" },
 });
 
 export default StockAlerts;

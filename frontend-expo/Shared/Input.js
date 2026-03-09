@@ -62,12 +62,12 @@ const styles = StyleSheet.create({
     input: {
         width: "100%",
         height: 52,
-        backgroundColor: "#1a2332",
+        backgroundColor: "#131927",
         borderRadius: 12,
         paddingHorizontal: 16,
         paddingRight: 16,
         borderWidth: 1.5,
-        borderColor: "rgba(37, 99, 235, 0.2)",
+        borderColor: "rgba(234, 88, 12, 0.2)",
         fontSize: 15,
         color: "#f8fafc",
     },
@@ -75,7 +75,7 @@ const styles = StyleSheet.create({
         paddingRight: 48,
     },
     inputDisabled: {
-        backgroundColor: "#0f1729",
+        backgroundColor: "#0b0f1a",
         color: "#94a3b8",
     },
     eyeButton: {

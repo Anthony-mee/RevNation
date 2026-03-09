@@ -199,7 +199,7 @@ const ProductForm = (props) => {
 
 const styles = StyleSheet.create({
     label: { width: "80%", marginTop: 10 },
-    labelText: { textDecorationLine: "underline", color: "#333", fontWeight: "600" },
+    labelText: { textDecorationLine: "underline", color: "#f1f5f9", fontWeight: "600" },
     buttonContainer: { width: "80%", marginBottom: 100, marginTop: 20, alignItems: "center" },
     buttonText: { color: "white" },
     imageContainer: {
@@ -210,7 +210,7 @@ const styles = StyleSheet.create({
         padding: 0,
         justifyContent: "center",
         borderRadius: 100,
-        borderColor: "#E0E0E0",
+        borderColor: "#ea580c",
         elevation: 10,
     },
     image: { width: "100%", height: "100%", borderRadius: 100 },
@@ -218,7 +218,7 @@ const styles = StyleSheet.create({
         position: "absolute",
         right: 5,
         bottom: 5,
-        backgroundColor: "#4A90E2",
+        backgroundColor: "#ea580c",
         padding: 8,
         borderRadius: 100,
         elevation: 20,
@@ -227,7 +227,7 @@ const styles = StyleSheet.create({
         position: "absolute",
         left: 5,
         bottom: 5,
-        backgroundColor: "#E24A4A",
+        backgroundColor: "#c2410c",
         padding: 8,
         borderRadius: 100,
         elevation: 20,

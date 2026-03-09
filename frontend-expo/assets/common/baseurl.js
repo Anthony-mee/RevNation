@@ -12,7 +12,7 @@ import { Platform } from "react-native";
  * For web/same machine: use 'http://localhost:4000'
  * When backend is deployed to cloud: set BACKEND_HOST to that URL (e.g. https://your-api.railway.app)
  */
-const LAN_BACKEND_HOST = "http://192.168.100.111:4000";
+const LAN_BACKEND_HOST = "http://192.168.100.65:4000";
 const LOCAL_BACKEND_HOST = "http://localhost:4000";
 const BACKEND_HOST = Platform.OS === "web" ? LOCAL_BACKEND_HOST : LAN_BACKEND_HOST;
 const baseURL = `${BACKEND_HOST}/api/v1/`;

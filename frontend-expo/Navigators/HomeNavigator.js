@@ -23,7 +23,7 @@ function MyStack() {
                     headerShown: true,
                     title: "Shop Products",
                     headerStyle: {
-                        backgroundColor: "#1a2332",
+                        backgroundColor: "#131927",
                     },
                     headerTintColor: "#ffffff",
                     headerTitleStyle: {
@@ -39,7 +39,7 @@ function MyStack() {
                     headerShown: true,
                     title: "Resell Products",
                     headerStyle: {
-                        backgroundColor: "#1a2332",
+                        backgroundColor: "#131927",
                     },
                     headerTintColor: "#ffffff",
                     headerTitleStyle: {
@@ -55,7 +55,7 @@ function MyStack() {
                     headerShown: true,
                     title: "Add Resell Product",
                     headerStyle: {
-                        backgroundColor: "#1a2332",
+                        backgroundColor: "#131927",
                     },
                     headerTintColor: "#ffffff",
                     headerTitleStyle: {

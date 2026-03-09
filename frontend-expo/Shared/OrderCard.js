@@ -117,20 +117,20 @@ const OrderCard = ({ item, update, isAdmin = false }) => {
     return (
         <View style={[{ backgroundColor: cardColor }, styles.container]}>
             <View style={styles.container}>
-                <Text>Order Number: #{item.id}</Text>
+                <Text style={{ color: "#f1f5f9" }}>Order Number: #{item.id}</Text>
             </View>
             <View style={{ marginTop: 10 }}>
-                <Text>
+                <Text style={{ color: "#f1f5f9" }}>
                     Status: {statusText} {orderStatus}
                 </Text>
-                <Text>
+                <Text style={{ color: "#f1f5f9" }}>
                     Address: {item.shippingAddress1} {item.shippingAddress2}
                 </Text>
-                <Text>City: {item.city}</Text>
-                <Text>Country: {item.country}</Text>
-                <Text>Date Ordered: {item.dateOrdered.split("T")[0]}</Text>
+                <Text style={{ color: "#f1f5f9" }}>City: {item.city}</Text>
+                <Text style={{ color: "#f1f5f9" }}>Country: {item.country}</Text>
+                <Text style={{ color: "#f1f5f9" }}>Date Ordered: {item.dateOrdered.split("T")[0]}</Text>
                 <View style={styles.priceContainer}>
-                    <Text>Price: </Text>
+                    <Text style={{ color: "#f1f5f9" }}>Price: </Text>
                     <Text style={styles.price}>$ {item.totalPrice}</Text>
                 </View>
                 {update && allowed.length > 0 ? (
@@ -170,7 +170,7 @@ const styles = StyleSheet.create({
         flexDirection: "row",
     },
     price: {
-        color: "white",
+        color: "#fb923c",
         fontWeight: "bold",
     },
 });
