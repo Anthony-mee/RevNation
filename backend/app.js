@@ -7,20 +7,32 @@ const config = require("./config");
 const userRoutes = require("./routes/users");
 const categoryRoutes = require("./routes/categories");
 const productRoutes = require("./routes/products");
+const serviceRoutes = require("./routes/services");
 const orderRoutes = require("./routes/orders");
 const stockAlertRoutes = require("./routes/stockAlerts");
+const {
+  getUploadDirName,
+  getUploadAbsolutePath,
+  ensureUploadDirExists,
+  getLegacyUploadPaths,
+} = require("./utils/uploads");
 
 const app = express();
+ensureUploadDirExists();
 
 app.use(cors({ origin: config.corsOrigin }));
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true }));
 app.use(morgan("dev"));
-app.use(`/${config.uploadDir}`, express.static(path.resolve(process.cwd(), config.uploadDir)));
+app.use(`/${getUploadDirName()}`, express.static(getUploadAbsolutePath()));
+for (const legacyPath of getLegacyUploadPaths()) {
+  app.use(`/${getUploadDirName()}`, express.static(legacyPath));
+}
 
 app.use(`${config.apiPrefix}/users`, userRoutes);
 app.use(`${config.apiPrefix}/categories`, categoryRoutes);
 app.use(`${config.apiPrefix}/products`, productRoutes);
+app.use(`${config.apiPrefix}/services`, serviceRoutes);
 app.use(`${config.apiPrefix}/orders`, orderRoutes);
 app.use(`${config.apiPrefix}/stock-alerts`, stockAlertRoutes);
 

@@ -11,68 +11,46 @@ import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { resolveImageUrl } from "../../assets/common/imageUrl";
 
-const LOW_STOCK_THRESHOLD = 10;
-
-const ListItem = ({ item, deleteProduct, isDeleting = false }) => {
+const ServiceListItem = ({ item, deleteService, isDeleting = false }) => {
     const navigation = useNavigation();
     const itemId = item.id || item._id;
-    const stock = Number(item.countInStock || 0);
-    const isLowStock = stock > 0 && stock <= LOW_STOCK_THRESHOLD;
-    const isOutOfStock = stock <= 0;
     const imageUri = resolveImageUrl(item.image);
 
     return (
-        <TouchableOpacity
-            onPress={() =>
-                navigation.navigate("Home", {
-                    screen: "Product Detail",
-                    params: { item },
-                })
-            }
-            style={styles.card}
-            activeOpacity={0.85}
-        >
+        <View style={styles.card}>
             <Image source={{ uri: imageUri }} resizeMode="cover" style={styles.image} />
 
             <View style={styles.content}>
                 <View style={styles.topRow}>
                     <View style={styles.leftInfo}>
-                        <Text style={styles.brand} numberOfLines={1}>{item.brand || "No brand"}</Text>
-                        <Text style={styles.name} numberOfLines={1}>{item.name || "Unnamed product"}</Text>
-                        <Text style={styles.category} numberOfLines={1}>{item.category?.name || "No category"}</Text>
+                        <Text style={styles.eyebrow}>{item.isFeatured ? "Featured Service" : "Service"}</Text>
+                        <Text style={styles.name} numberOfLines={1}>{item.name || "Unnamed service"}</Text>
+                        <Text style={styles.meta} numberOfLines={1}>{item.duration || "Custom duration"}</Text>
                     </View>
 
                     <Text style={styles.price}>${Number(item.price || 0).toFixed(2)}</Text>
                 </View>
 
+                <Text style={styles.description} numberOfLines={2}>
+                    {item.description || "No description provided yet."}
+                </Text>
+
                 <View style={styles.bottomRow}>
-                    <View
-                        style={[
-                            styles.stockBadge,
-                            isOutOfStock ? styles.stockOut : isLowStock ? styles.stockLow : styles.stockGood,
-                        ]}
-                    >
-                        <Ionicons
-                            name={isOutOfStock ? "close-circle" : isLowStock ? "alert-circle" : "checkmark-circle"}
-                            size={13}
-                            color="#fff"
-                        />
-                        <Text style={styles.stockText}>
-                            {isOutOfStock ? "Out of stock" : isLowStock ? `Low (${stock})` : `In stock (${stock})`}
-                        </Text>
+                    <View style={[styles.badge, item.isFeatured ? styles.badgeFeatured : styles.badgeStandard]}>
+                        <Text style={styles.badgeText}>{item.isFeatured ? "Featured" : "Standard"}</Text>
                     </View>
 
                     <View style={styles.actions}>
                         <TouchableOpacity
                             style={styles.actionButton}
-                            onPress={() => navigation.navigate("ProductForm", { item })}
+                            onPress={() => navigation.navigate("ServiceForm", { item })}
                         >
                             <Ionicons name="create-outline" size={16} color="#fdba74" />
                         </TouchableOpacity>
 
                         <TouchableOpacity
                             style={[styles.actionButton, styles.deleteAction]}
-                            onPress={() => deleteProduct(itemId)}
+                            onPress={() => deleteService(itemId)}
                         >
                             {isDeleting ? (
                                 <ActivityIndicator size="small" color="#ef4444" />
@@ -83,7 +61,7 @@ const ListItem = ({ item, deleteProduct, isDeleting = false }) => {
                     </View>
                 </View>
             </View>
-        </TouchableOpacity>
+        </View>
     );
 };
 
@@ -116,7 +94,7 @@ const styles = StyleSheet.create({
     leftInfo: {
         flex: 1,
     },
-    brand: {
+    eyebrow: {
         color: "#fb923c",
         fontSize: 11,
         textTransform: "uppercase",
@@ -129,7 +107,7 @@ const styles = StyleSheet.create({
         fontWeight: "700",
         marginTop: 2,
     },
-    category: {
+    meta: {
         color: "#94a3b8",
         fontSize: 12,
         marginTop: 2,
@@ -139,6 +117,12 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: "800",
     },
+    description: {
+        color: "#cbd5e1",
+        fontSize: 12,
+        lineHeight: 17,
+        marginTop: 6,
+    },
     bottomRow: {
         marginTop: 8,
         flexDirection: "row",
@@ -146,24 +130,18 @@ const styles = StyleSheet.create({
         alignItems: "center",
         gap: 10,
     },
-    stockBadge: {
-        flexDirection: "row",
-        alignItems: "center",
+    badge: {
         borderRadius: 999,
-        paddingHorizontal: 9,
+        paddingHorizontal: 10,
         paddingVertical: 5,
-        gap: 4,
     },
-    stockGood: {
-        backgroundColor: "#16a34a",
+    badgeFeatured: {
+        backgroundColor: "#0f766e",
     },
-    stockLow: {
-        backgroundColor: "#f59e0b",
+    badgeStandard: {
+        backgroundColor: "#334155",
     },
-    stockOut: {
-        backgroundColor: "#ef4444",
-    },
-    stockText: {
+    badgeText: {
         color: "#fff",
         fontSize: 11,
         fontWeight: "700",
@@ -188,4 +166,4 @@ const styles = StyleSheet.create({
     },
 });
 
-export default ListItem;
+export default ServiceListItem;

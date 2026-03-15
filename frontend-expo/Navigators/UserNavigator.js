@@ -5,17 +5,21 @@ import Register from "../Screens/User/Register";
 import UserProfile from "../Screens/User/UserProfile";
 import MyOrders from "../Screens/User/MyOrders";
 import NotificationCenter from "../Screens/User/NotificationCenter";
+import Favorites from "../Screens/User/Favorites";
+import Wallet from "../Screens/User/Wallet";
 
 const Stack = createStackNavigator();
 
 const UserNavigator = () => {
     return (
-        <Stack.Navigator>
-            <Stack.Screen name="Login" component={Login} options={{ headerShown: false }} />
-            <Stack.Screen name="Register" component={Register} options={{ headerShown: false }} />
-            <Stack.Screen name="User Profile" component={UserProfile} options={{ headerShown: false }} />
-            <Stack.Screen name="My Orders" component={MyOrders} options={{ headerShown: false }} />
-            <Stack.Screen name="Notifications" component={NotificationCenter} options={{ title: "Notifications" }} />
+        <Stack.Navigator screenOptions={{ headerShown: false }}>
+            <Stack.Screen name="Login" component={Login} />
+            <Stack.Screen name="Register" component={Register} />
+            <Stack.Screen name="User Profile" component={UserProfile} />
+            <Stack.Screen name="My Orders" component={MyOrders} />
+            <Stack.Screen name="Notifications" component={NotificationCenter} />
+            <Stack.Screen name="Favorites" component={Favorites} />
+            <Stack.Screen name="Wallet" component={Wallet} />
         </Stack.Navigator>
     );
 };

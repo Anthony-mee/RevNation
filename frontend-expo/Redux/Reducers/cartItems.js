@@ -2,12 +2,16 @@ import {
     ADD_TO_CART,
     REMOVE_FROM_CART,
     CLEAR_CART,
+    SET_CART_ITEMS,
 } from '../constants';
 
 const getItemKey = (item) => String(item?.id || item?._id || "");
 
 const cartItems = (state = [], action) => {
     switch (action.type) {
+        case SET_CART_ITEMS: {
+            return Array.isArray(action.payload) ? action.payload : [];
+        }
         case ADD_TO_CART: {
             const incoming = action.payload || {};
             const key = getItemKey(incoming);

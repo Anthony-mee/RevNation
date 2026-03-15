@@ -15,12 +15,25 @@ import ProductList from "./ProductList";
 import CategoryFilter from "./CategoryFilter";
 import axios from "axios";
 import baseURL from "../../assets/common/baseurl";
+import { resolveImageUrl } from "../../assets/common/imageUrl";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
 
 var { height, width } = Dimensions.get("window");
 const isWeb = Platform.OS === "web";
 const isLargeScreen = width >= 900;
 const isMobile = width < 768;
+
+const normalizeId = (value) => {
+    if (!value) return "";
+    if (typeof value === "string") return value;
+    if (typeof value === "object") {
+        if (value.id) return String(value.id);
+        if (value._id) return String(value._id);
+    }
+    return String(value);
+};
+
+const getCategoryId = (item) => normalizeId(item?.category?.id || item?.category?._id || item?.category);
 
 // Accent palette — motorcycle ember orange + dark steel
 const COLORS = {
@@ -44,14 +57,16 @@ const ProductContainer = () => {
     const [active, setActive] = useState(-1);
     const [initialState, setInitialState] = useState([]);
     const [productsCtg, setProductsCtg] = useState([]);
+    const [featuredProducts, setFeaturedProducts] = useState([]);
 
     const changeCtg = (ctg) => {
         if (ctg === "all") {
             setProductsCtg(initialState);
             setActive(true);
         } else {
+            const targetCategoryId = normalizeId(ctg);
             setProductsCtg(
-                products.filter((i) => i.category != null && (i.category.id === ctg || i.category._id === ctg))
+                products.filter((i) => getCategoryId(i) === targetCategoryId)
             );
             setActive(true);
         }
@@ -66,6 +81,7 @@ const ProductContainer = () => {
                     setProducts(res.data);
                     setProductsCtg(res.data);
                     setInitialState(res.data);
+                    setFeaturedProducts(res.data.filter((p) => p.isFeatured));
                 })
                 .catch((error) => console.log("Api call error"));
 
@@ -111,9 +127,9 @@ const ProductContainer = () => {
                             <TouchableOpacity
                                 style={styles.heroSecondary}
                                 activeOpacity={0.85}
-                                onPress={() => navigation.navigate("ResellProducts")}
+                                onPress={() => navigation.navigate("Services")}
                             >
-                                <Text style={styles.heroSecondaryText}>Resell Market</Text>
+                                <Text style={styles.heroSecondaryText}>Our Services</Text>
                             </TouchableOpacity>
                         </View>
                     </View>
@@ -129,14 +145,19 @@ const ProductContainer = () => {
                             { icon: "speedometer", title: "Engine Tuning", desc: "Performance optimization, dyno testing, and complete diagnostics for peak output." },
                             { icon: "bicycle", title: "Full Restoration", desc: "Classic bikes brought back to life with period-correct detail and modern reliability." },
                         ].map((s, i) => (
-                            <View key={i} style={styles.serviceCard}>
+                            <TouchableOpacity
+                                key={i}
+                                style={styles.serviceCard}
+                                activeOpacity={0.9}
+                                onPress={() => navigation.navigate("Services")}
+                            >
                                 <View style={styles.serviceIconWrap}>
                                     <Ionicons name={s.icon} size={26} color={COLORS.accent} />
                                 </View>
                                 <Text style={styles.serviceTitle}>{s.title}</Text>
                                 <Text style={styles.serviceDesc}>{s.desc}</Text>
                                 <View style={styles.serviceAccent} />
-                            </View>
+                            </TouchableOpacity>
                         ))}
                     </View>
                 </View>
@@ -167,31 +188,72 @@ const ProductContainer = () => {
                     </View>
                 </View>
 
-                {/* ─── GALLERY ─── */}
-                <View style={styles.galleryWrap}>
-                    <View style={styles.galleryHeader}>
-                        <View>
-                            <Text style={styles.galleryLabel}>WORKSHOP</Text>
-                            <Text style={styles.galleryHeading}>Recent Builds</Text>
+                {/* ─── FEATURED PRODUCTS ─── */}
+                {featuredProducts.length > 0 && (
+                    <View style={styles.galleryWrap}>
+                        <View style={styles.galleryHeader}>
+                            <View>
+                                <Text style={styles.galleryLabel}>FEATURED</Text>
+                                <Text style={styles.galleryHeading}>Featured Builds</Text>
+                            </View>
+                            <TouchableOpacity
+                                onPress={() => navigation.navigate("ShopProducts")}
+                                style={styles.viewAllBtn}
+                            >
+                                <Text style={styles.viewAllText}>View All</Text>
+                                <Ionicons name="arrow-forward" size={14} color={COLORS.accent} />
+                            </TouchableOpacity>
+                        </View>
+                        <View style={styles.galleryGrid}>
+                            {/* Large primary featured card */}
+                            <TouchableOpacity
+                                style={styles.galleryMain}
+                                activeOpacity={0.88}
+                                onPress={() => navigation.navigate("Product Detail", { item: featuredProducts[0] })}
+                            >
+                                <Image
+                                    source={{ uri: resolveImageUrl(featuredProducts[0].image) }}
+                                    style={styles.galleryImgLarge}
+                                    resizeMode="cover"
+                                />
+                                <View style={styles.galleryImgOverlay}>
+                                    <Text style={styles.galleryImgTag}>FEATURED BUILD</Text>
+                                </View>
+                                <View style={styles.galleryCardInfo}>
+                                    <Text style={styles.galleryCardName} numberOfLines={1}>{featuredProducts[0].name}</Text>
+                                    {featuredProducts[0].price != null && (
+                                        <Text style={styles.galleryCardPrice}>₱{Number(featuredProducts[0].price).toLocaleString()}</Text>
+                                    )}
+                                </View>
+                            </TouchableOpacity>
+                            {/* Side featured cards (up to 2 more) */}
+                            {featuredProducts.length > 1 && (
+                                <View style={styles.gallerySide}>
+                                    {featuredProducts.slice(1, 3).map((fp) => (
+                                        <TouchableOpacity
+                                            key={fp._id || fp.id}
+                                            style={styles.gallerySideItem}
+                                            activeOpacity={0.88}
+                                            onPress={() => navigation.navigate("Product Detail", { item: fp })}
+                                        >
+                                            <Image
+                                                source={{ uri: resolveImageUrl(fp.image) }}
+                                                style={styles.galleryImgSmall}
+                                                resizeMode="cover"
+                                            />
+                                            <View style={styles.gallerySideInfo}>
+                                                <Text style={styles.gallerySideName} numberOfLines={1}>{fp.name}</Text>
+                                                {fp.price != null && (
+                                                    <Text style={styles.gallerySidePrice}>₱{Number(fp.price).toLocaleString()}</Text>
+                                                )}
+                                            </View>
+                                        </TouchableOpacity>
+                                    ))}
+                                </View>
+                            )}
                         </View>
                     </View>
-                    <View style={styles.galleryGrid}>
-                        <View style={styles.galleryMain}>
-                            <Image source={require("../../assets/images/carousel1-sample.png")} style={styles.galleryImgLarge} resizeMode="cover" />
-                            <View style={styles.galleryImgOverlay}>
-                                <Text style={styles.galleryImgTag}>FEATURED BUILD</Text>
-                            </View>
-                        </View>
-                        <View style={styles.gallerySide}>
-                            <View style={styles.gallerySideItem}>
-                                <Image source={require("../../assets/images/carousel2-sample.png")} style={styles.galleryImgSmall} resizeMode="cover" />
-                            </View>
-                            <View style={styles.gallerySideItem}>
-                                <Image source={require("../../assets/images/carousel3-sample.png")} style={styles.galleryImgSmall} resizeMode="cover" />
-                            </View>
-                        </View>
-                    </View>
-                </View>
+                )}
 
                 {/* ─── CTA ─── */}
                 <View style={styles.ctaWrap}>
@@ -201,7 +263,7 @@ const ProductContainer = () => {
                         <Text style={styles.ctaDesc}>
                             Schedule a consultation and let's discuss your custom build, restoration, or dream machine.
                         </Text>
-                        <TouchableOpacity style={styles.ctaBtn} activeOpacity={0.85}>
+                        <TouchableOpacity style={styles.ctaBtn} activeOpacity={0.85} onPress={() => navigation.navigate("Services")}>
                             <Text style={styles.ctaBtnText}>Book a Consultation</Text>
                             <Ionicons name="arrow-forward" size={18} color={COLORS.white} />
                         </TouchableOpacity>
@@ -533,7 +595,43 @@ const styles = StyleSheet.create({
     },
     galleryImgSmall: {
         width: "100%",
-        height: isMobile ? 160 : 164,
+        height: isMobile ? 130 : 148,
+    },
+    galleryCardInfo: {
+        position: "absolute",
+        bottom: 0,
+        left: 0,
+        right: 0,
+        backgroundColor: "rgba(11,15,26,0.78)",
+        paddingHorizontal: 12,
+        paddingVertical: 10,
+    },
+    galleryCardName: {
+        color: COLORS.white,
+        fontSize: 14,
+        fontWeight: "700",
+        marginBottom: 2,
+    },
+    galleryCardPrice: {
+        color: COLORS.accentLight,
+        fontSize: 13,
+        fontWeight: "700",
+    },
+    gallerySideInfo: {
+        backgroundColor: "rgba(11,15,26,0.78)",
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+    },
+    gallerySideName: {
+        color: COLORS.white,
+        fontSize: 12,
+        fontWeight: "700",
+        marginBottom: 1,
+    },
+    gallerySidePrice: {
+        color: COLORS.accentLight,
+        fontSize: 11,
+        fontWeight: "700",
     },
 
     /* ── CTA ── */

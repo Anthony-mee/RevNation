@@ -24,6 +24,8 @@ const userSchema = new mongoose.Schema(
     },
     pushToken: { type: String, default: "" },
     pushTokenType: { type: String, enum: ["fcm", "expo", "unknown", ""], default: "" },
+    walletBalance: { type: Number, default: 0, min: 0 },
+    walletLastUpdatedAt: { type: Date, default: null },
   },
   { timestamps: true }
 );

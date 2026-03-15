@@ -17,6 +17,7 @@ import axios from "axios";
 import AuthGlobal from "../Context/Store/AuthGlobal";
 import { logoutUser } from "../Context/Actions/Auth.actions";
 import baseURL from "../assets/common/baseurl";
+import { resolveImageUrl } from "../assets/common/imageUrl";
 
 const { width } = Dimensions.get("window");
 
@@ -82,6 +83,16 @@ const WebNavBar = () => {
                     {/* Navigation Links - Hidden on mobile */}
                     {!isMobile && (
                         <View style={styles.navLinks}>
+                            <TouchableOpacity 
+                                style={styles.navLink}
+                                onPress={() => {
+                                    setProductsDropdownOpen(false);
+                                    navigation.navigate("Home", { screen: "Services" });
+                                }}
+                            >
+                                <Text style={styles.navLinkText}>Services</Text>
+                            </TouchableOpacity>
+
                             <TouchableOpacity 
                                 style={styles.navLink}
                                 onPress={() => {
@@ -180,7 +191,7 @@ const WebNavBar = () => {
                                     >
                                         {userProfile?.image ? (
                                             <Image 
-                                                source={{ uri: userProfile.image }} 
+                                                source={{ uri: resolveImageUrl(userProfile.image) }} 
                                                 style={styles.profileAvatar}
                                             />
                                         ) : (
@@ -255,7 +266,7 @@ const WebNavBar = () => {
                                     </View>
                                     {context.stateUser.isAuthenticated && userProfile?.image ? (
                                         <Image
-                                            source={{ uri: userProfile.image }}
+                                            source={{ uri: resolveImageUrl(userProfile.image) }}
                                             style={styles.mobileProfileAvatar}
                                         />
                                     ) : (
@@ -302,6 +313,16 @@ const WebNavBar = () => {
                         }}
                     >
                         <Text style={styles.mobileMenuLinkText}>Resell Products</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity 
+                        style={styles.mobileMenuLink}
+                        onPress={() => {
+                            navigation.navigate("Home", { screen: "Services" });
+                            setMenuOpen(false);
+                        }}
+                    >
+                        <Text style={styles.mobileMenuLinkText}>Services</Text>
                     </TouchableOpacity>
 
                     {context.stateUser.isAuthenticated && !context.stateUser.user.isAdmin && (

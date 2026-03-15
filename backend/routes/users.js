@@ -10,11 +10,17 @@ const config = require("../config");
 const authJwt = require("../middleware/authJwt");
 const User = require("../models/User");
 const { sendVerificationEmail } = require("../services/emailService");
+const {
+  getUploadAbsolutePath,
+  ensureUploadDirExists,
+  buildImageUrl,
+  normalizeImageUrl,
+} = require("../utils/uploads");
 
 const router = express.Router();
 
-const uploadPath = path.resolve(process.cwd(), config.uploadDir);
-fs.mkdirSync(uploadPath, { recursive: true });
+const uploadPath = getUploadAbsolutePath();
+ensureUploadDirExists();
 
 const storage = multer.diskStorage({
   destination: (_req, _file, cb) => cb(null, uploadPath),
@@ -48,11 +54,6 @@ function createEmailVerificationToken() {
   const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
   const expiresAt = new Date(Date.now() + config.emailVerifyTtlHours * 60 * 60 * 1000);
   return { token, tokenHash, expiresAt };
-}
-
-function buildImageUrl(req, filename) {
-  if (!filename) return "";
-  return `${req.protocol}://${req.get("host")}/${config.uploadDir}/${filename}`;
 }
 
 router.post("/register", upload.single("image"), async (req, res) => {
@@ -108,6 +109,9 @@ router.post("/register", upload.single("image"), async (req, res) => {
       }
     }
 
+    const userJson = user.toJSON();
+    userJson.image = normalizeImageUrl(req, userJson.image);
+
     return res.status(201).json({
       success: true,
       emailSent,
@@ -117,7 +121,7 @@ router.post("/register", upload.single("image"), async (req, res) => {
           : "Registration successful, but we could not send the verification email yet. Use resend verification after Mailtrap DNS is ready.")
         : "Registration successful.",
       emailError: emailErrorMessage,
-      user: user.toJSON(),
+      user: userJson,
     });
   } catch (error) {
     return res.status(500).json({ message: "Failed to register user" });
@@ -229,6 +233,64 @@ router.post("/login", async (req, res) => {
   }
 });
 
+// GET /users/wallet/me — current user's mock wallet balance
+router.get("/wallet/me", authJwt, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.userId).lean();
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    return res.status(200).json({
+      walletBalance: Number(user.walletBalance || 0),
+      walletLastUpdatedAt: user.walletLastUpdatedAt || null,
+    });
+  } catch (_error) {
+    return res.status(500).json({ message: "Failed to load wallet" });
+  }
+});
+
+async function walletTopupHandler(req, res) {
+  try {
+    const amount = Number(req.body?.amount || 0);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      return res.status(400).json({ message: "amount must be a positive number" });
+    }
+
+    if (amount > 100000) {
+      return res.status(400).json({ message: "amount is too large for mock top-up" });
+    }
+
+    const updatedUser = await User.findByIdAndUpdate(
+      req.user.userId,
+      {
+        $inc: { walletBalance: amount },
+        $set: { walletLastUpdatedAt: new Date() },
+      },
+      { new: true }
+    ).lean();
+
+    if (!updatedUser) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    return res.status(200).json({
+      success: true,
+      walletBalance: Number(updatedUser.walletBalance || 0),
+      toppedUp: amount,
+    });
+  } catch (error) {
+    console.error("[POST /users/wallet/topup] Error:", error.message);
+    return res.status(500).json({ message: error.message || "Failed to top up wallet" });
+  }
+}
+
+// POST /users/wallet/topup — user-facing top-up endpoint (mock implementation)
+router.post("/wallet/topup", authJwt, walletTopupHandler);
+
+// POST /users/wallet/mock-topup — backward-compatible mock endpoint
+router.post("/wallet/mock-topup", authJwt, walletTopupHandler);
+
 router.get("/:id", authJwt, async (req, res) => {
   try {
     const { id } = req.params;
@@ -244,7 +306,9 @@ router.get("/:id", authJwt, async (req, res) => {
       return res.status(404).json({ message: "User not found" });
     }
 
-    return res.status(200).json(user.toJSON());
+    const userJson = user.toJSON();
+    userJson.image = normalizeImageUrl(req, userJson.image);
+    return res.status(200).json(userJson);
   } catch (_error) {
     return res.status(500).json({ message: "Failed to load user profile" });
   }
@@ -309,7 +373,9 @@ router.put("/profile", authJwt, async (req, res) => {
       return res.status(404).json({ message: "User not found" });
     }
 
-    return res.status(200).json(user.toJSON());
+    const userJson = user.toJSON();
+    userJson.image = normalizeImageUrl(req, userJson.image);
+    return res.status(200).json(userJson);
   } catch (_error) {
     return res.status(500).json({ message: "Failed to update profile" });
   }
@@ -352,6 +418,7 @@ router.post("/profile/photo", authJwt, upload.single("image"), async (req, res) 
     }
 
     const userJson = user.toJSON();
+    userJson.image = normalizeImageUrl(req, userJson.image);
     console.log("[POST /profile/photo] User updated successfully:", {
       userId: userJson.id,
       email: userJson.email,
@@ -410,6 +477,7 @@ router.post("/profile/photo-base64", authJwt, async (req, res) => {
     }
 
     const userJson = user.toJSON();
+    userJson.image = normalizeImageUrl(req, userJson.image);
     console.log("[POST /profile/photo-base64] User updated successfully:", {
       userId: userJson.id,
       email: userJson.email,

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import {
     View,
     Text,
@@ -11,117 +11,65 @@ import {
     ScrollView,
     useWindowDimensions,
 } from "react-native";
-import { Picker } from "@react-native-picker/picker";
-import Input from "../../Shared/Input";
-import EasyButton from "../../Shared/StyledComponents/EasyButton";
 import Toast from "react-native-toast-message";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import baseURL from "../../assets/common/baseurl";
-import Error from "../../Shared/Error";
 import axios from "axios";
 import * as ImagePicker from "expo-image-picker";
 import * as ImageManipulator from "expo-image-manipulator";
 import { useNavigation } from "@react-navigation/native";
 import mime from "mime";
 import { Ionicons } from "@expo/vector-icons";
+import baseURL from "../../assets/common/baseurl";
+import Input from "../../Shared/Input";
+import EasyButton from "../../Shared/StyledComponents/EasyButton";
+import Error from "../../Shared/Error";
 import { FALLBACK_IMAGE, resolveImageUrl } from "../../assets/common/imageUrl";
 
-const ProductForm = (props) => {
-    const routeProductType = props.route?.params?.productType === "resell" ? "resell" : "shop";
-    const returnScreen = props.route?.params?.returnScreen || "Products";
-    const [pickerValue, setPickerValue] = useState("");
-    const [brand, setBrand] = useState("");
+const ServiceForm = (props) => {
+    const returnScreen = props.route?.params?.returnScreen || "Services";
     const [name, setName] = useState("");
     const [price, setPrice] = useState("");
     const [description, setDescription] = useState("");
+    const [richDescription, setRichDescription] = useState("");
+    const [duration, setDuration] = useState("");
     const [image, setImage] = useState("");
     const [mainImage, setMainImage] = useState("");
-    const [category, setCategory] = useState("");
-    const [categories, setCategories] = useState([]);
     const [token, setToken] = useState("");
     const [error, setError] = useState("");
-    const [countInStock, setCountInStock] = useState("");
-    const [rating, setRating] = useState(0);
-    const [isFeatured, setIsFeatured] = useState(false);
-    const [richDescription, setRichDescription] = useState("");
-    const [numReviews, setNumReviews] = useState(0);
     const [item, setItem] = useState(null);
+    const [isFeatured, setIsFeatured] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [imagePicked, setImagePicked] = useState(false);
-    const [loadingCategories, setLoadingCategories] = useState(true);
     const navigation = useNavigation();
     const { width } = useWindowDimensions();
 
-    const hasCategories = categories.length > 0;
     const isDesktop = width >= 980;
 
     useEffect(() => {
         if (props.route?.params?.item) {
-            const i = props.route.params.item;
-            setItem(i);
-            setBrand(i.brand || "");
-            setName(i.name || "");
-            setPrice(String(i.price ?? ""));
-            setDescription(i.description || "");
-            setRichDescription(i.richDescription || "");
-            setMainImage(i.image || "");
-            setImage(i.image || "");
-            const catId = i.category?._id || i.category?.id || "";
-            setCategory(catId);
-            setPickerValue(catId);
-            setCountInStock(String(i.countInStock ?? ""));
-            setRating(String(i.rating ?? 0));
-            setNumReviews(String(i.numReviews ?? 0));
-            setIsFeatured(Boolean(i.isFeatured));
-            setImagePicked(false);
-            setError("");
+            const currentItem = props.route.params.item;
+            setItem(currentItem);
+            setName(currentItem.name || "");
+            setPrice(String(currentItem.price ?? ""));
+            setDescription(currentItem.description || "");
+            setRichDescription(currentItem.richDescription || "");
+            setDuration(currentItem.duration || "");
+            setMainImage(currentItem.image || "");
+            setImage(currentItem.image || "");
+            setIsFeatured(Boolean(currentItem.isFeatured));
         } else {
             setItem(null);
-            setBrand("");
-            setName("");
-            setPrice("");
-            setDescription("");
-            setRichDescription("");
-            setImage("");
-            setMainImage("");
-            setCategory("");
-            setPickerValue("");
-            setCountInStock("");
-            setRating("0");
-            setNumReviews("0");
-            setIsFeatured(false);
-            setImagePicked(false);
-            setError("");
         }
-        AsyncStorage.getItem("jwt").then((res) => setToken(res || "")).catch(() => {});
-        setLoadingCategories(true);
-        axios
-            .get(`${baseURL}categories`)
-            .then((res) => {
-                const nextCategories = Array.isArray(res.data) ? res.data : [];
-                setCategories(nextCategories);
 
-                if (!props.route?.params?.item && nextCategories.length > 0) {
-                    const firstCategoryId = nextCategories[0].id || nextCategories[0]._id;
-                    setCategory(firstCategoryId);
-                    setPickerValue(firstCategoryId);
-                }
-            })
-            .catch(() => {
-                setCategories([]);
-                Toast.show({
-                    topOffset: 60,
-                    type: "error",
-                    text1: "Error loading categories",
-                });
-            })
-            .finally(() => setLoadingCategories(false));
+        AsyncStorage.getItem("jwt").then((res) => setToken(res || "")).catch(() => {});
+
         if (Platform.OS !== "web") {
             ImagePicker.requestCameraPermissionsAsync().then(({ status }) => {
-                if (status !== "granted") alert("Camera roll permission needed.");
+                if (status !== "granted") {
+                    alert("Camera permission needed.");
+                }
             });
         }
-        return () => setCategories([]);
     }, [props.route?.params]);
 
     const optimizeImageForUpload = async (uri) => {
@@ -147,6 +95,7 @@ const ProductForm = (props) => {
             aspect: [4, 3],
             quality: 0.8,
         });
+
         if (!result.canceled) {
             const rawUri = result.assets[0].uri;
             const uri = await optimizeImageForUpload(rawUri);
@@ -162,6 +111,7 @@ const ProductForm = (props) => {
             aspect: [4, 3],
             quality: 0.8,
         });
+
         if (!result.canceled) {
             const rawUri = result.assets[0].uri;
             const uri = await optimizeImageForUpload(rawUri);
@@ -171,42 +121,28 @@ const ProductForm = (props) => {
         }
     };
 
-    const addProduct = async () => {
+    const saveService = async () => {
         if (isSubmitting) return;
-        if (!hasCategories) {
-            setError("Create a category first before adding products");
-            Toast.show({
-                topOffset: 60,
-                type: "error",
-                text1: "No categories found",
-                text2: "Open Categories and add one first",
-            });
+        if (!name || !price) {
+            setError("Please fill in the service name and price");
             return;
         }
-        if (!name || !brand || !price || !description || !category || !countInStock) {
-            setError("Please fill in the form correctly");
-            return;
-        }
+
         setIsSubmitting(true);
         const formData = new FormData();
         formData.append("name", name);
-        formData.append("brand", brand);
         formData.append("price", price);
         formData.append("description", description);
-        formData.append("category", category);
-        formData.append("countInStock", countInStock);
         formData.append("richDescription", richDescription);
-        formData.append("rating", rating);
-        formData.append("numReviews", numReviews);
+        formData.append("duration", duration);
         formData.append("isFeatured", isFeatured);
-        formData.append("productType", routeProductType);
 
         if (imagePicked && image) {
             if (Platform.OS === "web") {
                 try {
                     const response = await fetch(image);
                     const blob = await response.blob();
-                    const fileName = `product-${Date.now()}.jpg`;
+                    const fileName = `service-${Date.now()}.jpg`;
                     formData.append("image", blob, fileName);
                 } catch (_error) {
                     Toast.show({
@@ -225,37 +161,41 @@ const ProductForm = (props) => {
                 formData.append("image", {
                     uri: normalizedImageUri,
                     type: mime.getType(normalizedImageUri) || "image/jpeg",
-                    name: normalizedImageUri.split("/").pop() || `product-${Date.now()}.jpg`,
+                    name: normalizedImageUri.split("/").pop() || `service-${Date.now()}.jpg`,
                 });
             }
         }
 
         const config = {
             headers: {
-                Authorization: "Bearer " + token,
+                Authorization: `Bearer ${token}`,
             },
         };
-        const productId = item?.id ?? item?._id;
-        const thenNav = () => {
-            Toast.show({ topOffset: 60, type: "success", text1: productId ? "Product updated" : "Product added" });
-            setTimeout(() => navigation.navigate(returnScreen), 500);
-        };
-        const catchErr = (err) => {
-            console.log('ProductForm error:', err?.response?.data || err?.message || err);
-            const responseData = err?.response?.data;
-            const msg =
-                (typeof responseData === "string" && responseData.includes("MulterError"))
-                    ? "Image is too large. Please choose a smaller photo."
-                    : err?.response?.data?.message || err?.message || "Something went wrong";
-            Toast.show({ topOffset: 60, type: "error", text1: msg });
-        };
-        const request = productId
-            ? axios.put(`${baseURL}products/${productId}`, formData, config)
-            : axios.post(`${baseURL}products`, formData, config);
+
+        const serviceId = item?.id ?? item?._id;
+        const request = serviceId
+            ? axios.put(`${baseURL}services/${serviceId}`, formData, config)
+            : axios.post(`${baseURL}services`, formData, config);
 
         request
-            .then((res) => (res.status === 200 || res.status === 201) && thenNav())
-            .catch(catchErr)
+            .then((res) => {
+                if (res.status === 200 || res.status === 201) {
+                    Toast.show({
+                        topOffset: 60,
+                        type: "success",
+                        text1: serviceId ? "Service updated" : "Service added",
+                    });
+                    setTimeout(() => navigation.navigate(returnScreen), 500);
+                }
+            })
+            .catch((err) => {
+                const responseData = err?.response?.data;
+                const message =
+                    (typeof responseData === "string" && responseData.includes("MulterError"))
+                        ? "Image is too large. Please choose a smaller photo."
+                        : err?.response?.data?.message || err?.message || "Something went wrong";
+                Toast.show({ topOffset: 60, type: "error", text1: message });
+            })
             .finally(() => setIsSubmitting(false));
     };
 
@@ -271,17 +211,12 @@ const ProductForm = (props) => {
                 <View style={[styles.layout, isDesktop && styles.layoutDesktop]}>
                     <View style={[styles.formPane, isDesktop && styles.formPaneDesktop]}>
                         <View style={styles.headerRow}>
-                            <Text style={styles.pageTitle}>{item ? "Edit Product" : "Add New Product"}</Text>
+                            <Text style={styles.pageTitle}>{item ? "Edit Service" : "Add New Service"}</Text>
                             <View style={styles.headerActions}>
                                 <EasyButton medium secondary onPress={() => navigation.navigate(returnScreen)}>
                                     <Text style={styles.headerBtnText}>Cancel</Text>
                                 </EasyButton>
-                                <EasyButton
-                                    medium
-                                    primary
-                                    onPress={addProduct}
-                                    disabled={isSubmitting || loadingCategories || !hasCategories}
-                                >
+                                <EasyButton medium primary onPress={saveService} disabled={isSubmitting}>
                                     {isSubmitting ? (
                                         <ActivityIndicator color="white" size="small" />
                                     ) : (
@@ -293,15 +228,16 @@ const ProductForm = (props) => {
 
                         <View style={styles.card}>
                             <Text style={styles.cardTitle}>Base Information</Text>
-                            <Input label="Title" placeholder="Product title" value={name} onChangeText={setName} />
-                            <Input label="Brand" placeholder="Brand name" value={brand} onChangeText={setBrand} />
+                            <Input label="Service Name" placeholder="Enter service name" value={name} onChangeText={setName} />
+                            <Input label="Price" placeholder="0.00" value={price} keyboardType="numeric" onChangeText={setPrice} />
+                            <Input label="Duration" placeholder="e.g. 60 minutes" value={duration} onChangeText={setDuration} />
 
                             <Text style={styles.fieldLabel}>Description</Text>
                             <TextInput
                                 style={styles.textArea}
                                 value={description}
                                 onChangeText={setDescription}
-                                placeholder="Short product description"
+                                placeholder="Short service summary"
                                 placeholderTextColor="#64748b"
                                 multiline
                             />
@@ -311,7 +247,7 @@ const ProductForm = (props) => {
                                 style={styles.textArea}
                                 value={richDescription}
                                 onChangeText={setRichDescription}
-                                placeholder="Detailed specs, materials, notes"
+                                placeholder="Detailed scope, benefits, or notes"
                                 placeholderTextColor="#64748b"
                                 multiline
                             />
@@ -332,56 +268,13 @@ const ProductForm = (props) => {
                                     </TouchableOpacity>
                                 </View>
                             </View>
-                            <Text style={styles.imageHint}>Use clear, front-facing product photos.</Text>
+                            <Text style={styles.imageHint}>Use a clean service cover or portfolio image.</Text>
                         </View>
 
                         <View style={styles.card}>
-                            <Text style={styles.cardTitle}>Details</Text>
-                            <View style={styles.inlineRow}>
-                                <View style={styles.inlineItem}>
-                                    <Input label="Price" placeholder="0.00" value={price} keyboardType="numeric" onChangeText={setPrice} />
-                                </View>
-                                <View style={styles.inlineItem}>
-                                    <Input label="Stock" placeholder="0" value={countInStock} keyboardType="numeric" onChangeText={setCountInStock} />
-                                </View>
-                            </View>
-
-                            <View style={styles.inlineRow}>
-                                <View style={styles.inlineItem}>
-                                    <Input label="Rating" placeholder="0" value={String(rating)} keyboardType="numeric" onChangeText={setRating} />
-                                </View>
-                                <View style={styles.inlineItem}>
-                                    <Input label="Reviews" placeholder="0" value={String(numReviews)} keyboardType="numeric" onChangeText={setNumReviews} />
-                                </View>
-                            </View>
-
-                            <View style={styles.pickerSection}>
-                                <Text style={styles.fieldLabel}>Category</Text>
-                                {loadingCategories ? (
-                                    <ActivityIndicator color="#ea580c" size="small" style={styles.categoryLoading} />
-                                ) : hasCategories ? (
-                                    <Picker
-                                        style={styles.picker}
-                                        itemStyle={styles.pickerItem}
-                                        selectedValue={pickerValue}
-                                        onValueChange={(e) => { setPickerValue(e); setCategory(e); }}
-                                    >
-                                        {categories.map((c) => (
-                                            <Picker.Item key={c.id || c._id} label={c.name} value={c.id || c._id} />
-                                        ))}
-                                    </Picker>
-                                ) : (
-                                    <View style={styles.emptyCategoryState}>
-                                        <Text style={styles.emptyCategoryText}>No categories yet. Add one before creating a product.</Text>
-                                        <EasyButton medium secondary onPress={() => navigation.navigate("Categories") }>
-                                            <Text style={styles.buttonText}>Open Categories</Text>
-                                        </EasyButton>
-                                    </View>
-                                )}
-                            </View>
-
+                            <Text style={styles.cardTitle}>Visibility</Text>
                             <View style={styles.featuredRow}>
-                                <Text style={styles.fieldLabel}>Featured Product</Text>
+                                <Text style={styles.fieldLabel}>Featured Service</Text>
                                 <TouchableOpacity
                                     style={[styles.featuredToggle, isFeatured && styles.featuredToggleOn]}
                                     onPress={() => setIsFeatured((prev) => !prev)}
@@ -401,13 +294,12 @@ const ProductForm = (props) => {
                             <Image source={{ uri: previewImageUri }} style={styles.previewHeroImage} resizeMode="cover" />
                             <View style={styles.previewBody}>
                                 <View style={styles.previewTopRow}>
-                                    <Text style={styles.previewName} numberOfLines={1}>{name || "Product Name"}</Text>
+                                    <Text style={styles.previewName} numberOfLines={1}>{name || "Service Name"}</Text>
                                     <Text style={styles.previewPrice}>${Number(price || 0).toFixed(2)}</Text>
                                 </View>
-                                <Text style={styles.previewMeta}>{brand || "Brand"}</Text>
-                                <Text style={styles.previewDesc} numberOfLines={4}>{description || "Product description preview will appear here."}</Text>
+                                <Text style={styles.previewMeta}>{duration || "Flexible duration"}</Text>
+                                <Text style={styles.previewDesc} numberOfLines={4}>{description || "Service description preview will appear here."}</Text>
                                 <View style={styles.previewTagRow}>
-                                    <View style={styles.previewTag}><Text style={styles.previewTagText}>Stock: {countInStock || 0}</Text></View>
                                     <View style={styles.previewTag}><Text style={styles.previewTagText}>{isFeatured ? "Featured" : "Standard"}</Text></View>
                                 </View>
                             </View>
@@ -550,46 +442,6 @@ const styles = StyleSheet.create({
         marginTop: 10,
         fontSize: 12,
     },
-    inlineRow: {
-        flexDirection: "row",
-        gap: 10,
-    },
-    inlineItem: {
-        flex: 1,
-    },
-    pickerSection: {
-        width: "100%",
-        marginTop: 4,
-    },
-    picker: {
-        height: 54,
-        width: "100%",
-        color: "#f8fafc",
-        backgroundColor: "#131927",
-        borderWidth: 1.5,
-        borderColor: "rgba(234, 88, 12, 0.2)",
-        borderRadius: 12,
-    },
-    pickerItem: {
-        color: "#f8fafc",
-        backgroundColor: "#131927",
-    },
-    categoryLoading: {
-        marginVertical: 24,
-    },
-    emptyCategoryState: {
-        width: "100%",
-        alignSelf: "center",
-        backgroundColor: "#131927",
-        borderRadius: 12,
-        padding: 16,
-        alignItems: "center",
-        gap: 12,
-    },
-    emptyCategoryText: {
-        color: "#f1f5f9",
-        textAlign: "center",
-    },
     featuredRow: {
         marginTop: 6,
         flexDirection: "row",
@@ -683,11 +535,6 @@ const styles = StyleSheet.create({
         fontSize: 12,
         fontWeight: "600",
     },
-    buttonText: {
-        color: "white",
-        fontWeight: "700",
-        fontSize: 14,
-    },
 });
 
-export default ProductForm;
+export default ServiceForm;

@@ -11,27 +11,9 @@ import { addToCart } from "../../Redux/Actions/cartActions";
 import { useDispatch } from "react-redux";
 import Toast from "react-native-toast-message";
 import { Ionicons } from "@expo/vector-icons";
+import { resolveImageUrl } from "../../assets/common/imageUrl";
 
 var { width } = Dimensions.get("window");
-
-// Product images come from the API (item.image). Fallback when no image: placeholder URL.
-const FALLBACK_IMAGE = "https://cdn.pixabay.com/photo/2012/04/01/17/29/box-23649_960_720.png";
-
-function resolveImageUrl(rawUrl) {
-    if (!rawUrl || typeof rawUrl !== "string") {
-        return FALLBACK_IMAGE;
-    }
-
-    const trimmed = rawUrl.trim();
-    if (!trimmed.startsWith("http://") && !trimmed.startsWith("https://")) {
-        return FALLBACK_IMAGE;
-    }
-
-    // Some seed data uses legacy placeholder hosts that may fail DNS on certain networks.
-    return trimmed
-        .replace("via.placeholder.com", "placehold.co")
-        .replace("placeholder.com", "placehold.co");
-}
 
 const ProductCard = (props) => {
     const { name, price, image, countInStock, brand } = props;

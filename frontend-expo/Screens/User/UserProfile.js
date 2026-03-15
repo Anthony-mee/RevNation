@@ -1,5 +1,5 @@
 import React, { useContext, useState, useCallback } from "react";
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Image, ActivityIndicator, Alert } from "react-native";
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Image, ActivityIndicator, Alert, Platform } from "react-native";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
@@ -12,6 +12,15 @@ import { logoutUser } from "../../Context/Actions/Auth.actions";
 import Input from "../../Shared/Input";
 import Toast from "react-native-toast-message";
 import AddressMapPicker from "../../Shared/AddressMapPicker";
+import { resolveImageUrl } from "../../assets/common/imageUrl";
+
+const getMimeTypeFromFileName = (fileName) => {
+    const lower = String(fileName || "").toLowerCase();
+    if (lower.endsWith(".png")) return "image/png";
+    if (lower.endsWith(".webp")) return "image/webp";
+    if (lower.endsWith(".heic")) return "image/heic";
+    return "image/jpeg";
+};
 
 const UserProfile = () => {
     const context = useContext(AuthGlobal);
@@ -144,21 +153,14 @@ const UserProfile = () => {
         }
     };
 
-    const handlePhotoSelect = () => {
-        Alert.alert(
-            "Update Profile Photo",
-            "Choose an option",
-            [
-                { text: "Take Photo", onPress: takePhoto },
-                { text: "Choose from Library", onPress: pickImage },
-                { text: "Cancel", style: "cancel" }
-            ],
-            { cancelable: true }
-        );
-    };
-
     const takePhoto = async () => {
         try {
+            if (Platform.OS === "web") {
+                // Web camera behavior is inconsistent across browsers, so use gallery fallback.
+                await pickImage();
+                return;
+            }
+
             const { status } = await ImagePicker.requestCameraPermissionsAsync();
             if (status !== "granted") {
                 Toast.show({
@@ -203,7 +205,7 @@ const UserProfile = () => {
             }
 
             const result = await ImagePicker.launchImageLibraryAsync({
-                mediaTypes: ["images"],
+                mediaTypes: ImagePicker.MediaTypeOptions.Images,
                 allowsEditing: true,
                 aspect: [1, 1],
                 quality: 0.8,
@@ -233,22 +235,53 @@ const UserProfile = () => {
             }
 
             console.log("[uploadPhoto] Starting upload with URI:", uri);
-            
-            // Resize and convert to base64
+            const fileName = uri.split("/").pop() || `profile-${Date.now()}.jpg`;
+
+            // Primary path: multipart upload is more reliable for mobile and avoids large JSON payloads.
+            try {
+                const formData = new FormData();
+                formData.append("image", {
+                    uri,
+                    name: fileName,
+                    type: getMimeTypeFromFileName(fileName),
+                });
+
+                const response = await axios.post(`${baseURL}users/profile/photo`, formData, {
+                    headers: {
+                        Authorization: `Bearer ${jwt}`,
+                        "Content-Type": "multipart/form-data",
+                    },
+                    timeout: 30000,
+                });
+
+                console.log("[uploadPhoto] Multipart upload successful:", response.data);
+                setProfileImage(response.data.image);
+                Toast.show({
+                    topOffset: 60,
+                    type: "success",
+                    text1: "Photo updated successfully",
+                });
+                return;
+            } catch (multipartError) {
+                console.warn("[uploadPhoto] Multipart upload failed, trying base64 fallback:", multipartError.message);
+            }
+
+            // Fallback path: compressed base64 upload.
             const manipResult = await ImageManipulator.manipulateAsync(
                 uri,
                 [{ resize: { width: 800 } }],
-                { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG, base64: true }
+                { compress: 0.75, format: ImageManipulator.SaveFormat.JPEG, base64: true }
             );
 
-            const fileName = uri.split("/").pop() || "photo.jpg";
-            
-            console.log("[uploadPhoto] Uploading to:", `${baseURL}users/profile/photo-base64`);
+            if (!manipResult?.base64) {
+                throw new Error("Failed to process image data");
+            }
 
-            const response = await axios.post(`${baseURL}users/profile/photo-base64`, 
+            const response = await axios.post(
+                `${baseURL}users/profile/photo-base64`,
                 {
                     imageBase64: manipResult.base64,
-                    fileName: fileName
+                    fileName,
                 },
                 {
                     headers: {
@@ -259,12 +292,12 @@ const UserProfile = () => {
                 }
             );
 
-            console.log("[uploadPhoto] Upload successful:", response.data);
+            console.log("[uploadPhoto] Base64 fallback upload successful:", response.data);
             setProfileImage(response.data.image);
             Toast.show({
                 topOffset: 60,
                 type: "success",
-                text1: "Photo updated successfully"
+                text1: "Photo updated successfully",
             });
         } catch (error) {
             console.error("[uploadPhoto] Error:", error.message, error.response?.data);
@@ -272,7 +305,7 @@ const UserProfile = () => {
                 topOffset: 60,
                 type: "error",
                 text1: "Failed to upload photo",
-                text2: error.response?.data?.message || error.message
+                text2: error.response?.data?.message || error.message,
             });
         } finally {
             setIsUploadingPhoto(false);
@@ -285,22 +318,25 @@ const UserProfile = () => {
                 {/* Profile Header Card */}
                 <View style={styles.profileHeader}>
                     <View style={styles.avatarContainer}>
-                        <TouchableOpacity onPress={handlePhotoSelect} activeOpacity={0.8}>
-                            {profileImage ? (
-                                <Image source={{ uri: profileImage }} style={styles.avatar} />
-                            ) : (
-                                <View style={styles.avatarPlaceholder}>
-                                    <Ionicons name="person" size={60} color="#94a3b8" />
-                                </View>
-                            )}
-                            <View style={styles.cameraButton}>
+                        <View style={styles.avatarWrap}>
+                            <TouchableOpacity onPress={pickImage} activeOpacity={0.85}>
+                                {profileImage ? (
+                                    <Image source={{ uri: resolveImageUrl(profileImage) }} style={styles.avatar} />
+                                ) : (
+                                    <View style={styles.avatarPlaceholder}>
+                                        <Ionicons name="person" size={60} color="#94a3b8" />
+                                    </View>
+                                )}
+                            </TouchableOpacity>
+                            <TouchableOpacity style={styles.cameraButton} onPress={takePhoto} activeOpacity={0.85}>
                                 {isUploadingPhoto ? (
                                     <ActivityIndicator size="small" color="#fff" />
                                 ) : (
                                     <Ionicons name="camera" size={18} color="#fff" />
                                 )}
-                            </View>
-                        </TouchableOpacity>
+                            </TouchableOpacity>
+                        </View>
+                        <Text style={styles.photoHelpText}>Tap photo to upload, camera icon to take a picture</Text>
                     </View>
                     
                     <Text style={styles.userName}>{name || "User Name"}</Text>
@@ -407,21 +443,64 @@ const UserProfile = () => {
 
                 {/* Action Buttons */}
                 <View style={styles.actionsContainer}>
-                    <TouchableOpacity 
-                        style={[styles.saveButton, isSaving && styles.buttonDisabled]} 
-                        onPress={saveProfile}
-                        disabled={isSaving}
-                        activeOpacity={0.8}
-                    >
-                        {isSaving ? (
-                            <ActivityIndicator size="small" color="#fff" />
-                        ) : (
-                            <>
-                                <Ionicons name="save-outline" size={20} color="#fff" />
-                                <Text style={styles.saveButtonText}>Save Profile</Text>
-                            </>
-                        )}
-                    </TouchableOpacity>
+                    <View style={styles.quickActionsCard}>
+                        <Text style={styles.quickActionsTitle}>Quick Actions</Text>
+                        <View style={styles.quickActionsGrid}>
+                            <TouchableOpacity
+                                style={styles.quickActionButton}
+                                onPress={() => navigation.navigate("My Orders")}
+                                activeOpacity={0.82}
+                            >
+                                <Ionicons name="bag-handle-outline" size={18} color="#fb923c" />
+                                <Text style={styles.quickActionText}>My Orders</Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                                style={styles.quickActionButton}
+                                onPress={() => navigation.navigate("Wallet")}
+                                activeOpacity={0.82}
+                            >
+                                <Ionicons name="wallet-outline" size={18} color="#fb923c" />
+                                <Text style={styles.quickActionText}>Wallet</Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                                style={styles.quickActionButton}
+                                onPress={() => navigation.navigate("Favorites")}
+                                activeOpacity={0.82}
+                            >
+                                <Ionicons name="heart-outline" size={18} color="#fb923c" />
+                                <Text style={styles.quickActionText}>Favorites</Text>
+                            </TouchableOpacity>
+
+                            {userProfile?.isAdmin ? (
+                                <TouchableOpacity
+                                    style={styles.quickActionButton}
+                                    onPress={() => navigation.navigate("Admin")}
+                                    activeOpacity={0.82}
+                                >
+                                    <Ionicons name="settings-outline" size={18} color="#fb923c" />
+                                    <Text style={styles.quickActionText}>Admin</Text>
+                                </TouchableOpacity>
+                            ) : null}
+
+                            <TouchableOpacity 
+                                style={[styles.quickActionButton, isSaving && styles.buttonDisabled]} 
+                                onPress={saveProfile}
+                                disabled={isSaving}
+                                activeOpacity={0.82}
+                            >
+                                {isSaving ? (
+                                    <ActivityIndicator size="small" color="#fb923c" />
+                                ) : (
+                                    <>
+                                        <Ionicons name="save-outline" size={18} color="#fb923c" />
+                                        <Text style={styles.quickActionText}>Save Profile</Text>
+                                    </>
+                                )}
+                            </TouchableOpacity>
+                        </View>
+                    </View>
 
                     <TouchableOpacity 
                         style={styles.logoutButton}
@@ -484,6 +563,10 @@ const styles = StyleSheet.create({
     },
     avatarContainer: {
         marginBottom: 16,
+        alignItems: "center",
+    },
+    avatarWrap: {
+        position: "relative",
     },
     avatar: {
         width: 120,
@@ -514,6 +597,11 @@ const styles = StyleSheet.create({
         alignItems: "center",
         borderWidth: 3,
         borderColor: "#131927",
+    },
+    photoHelpText: {
+        marginTop: 8,
+        color: "#94a3b8",
+        fontSize: 12,
     },
     userName: {
         fontSize: 24,
@@ -622,18 +710,40 @@ const styles = StyleSheet.create({
         marginTop: 8,
         gap: 12,
     },
-    saveButton: {
+    quickActionsCard: {
+        backgroundColor: "#131927",
+        borderRadius: 18,
+        borderWidth: 1,
+        borderColor: "rgba(251, 146, 60, 0.12)",
+        padding: 12,
+    },
+    quickActionsTitle: {
+        color: "#f8fafc",
+        fontSize: 16,
+        fontWeight: "800",
+        marginBottom: 12,
+    },
+    quickActionsGrid: {
+        flexDirection: "row",
+        flexWrap: "wrap",
+        justifyContent: "space-between",
+        rowGap: 10,
+    },
+    quickActionButton: {
+        width: "48.5%",
         flexDirection: "row",
         alignItems: "center",
         justifyContent: "center",
-        backgroundColor: "#ea580c",
+        backgroundColor: "#0b1220",
         paddingVertical: 16,
         borderRadius: 12,
         gap: 8,
+        borderWidth: 1,
+        borderColor: "rgba(251, 146, 60, 0.38)",
     },
-    saveButtonText: {
-        color: "#fff",
-        fontSize: 16,
+    quickActionText: {
+        color: "#f8fafc",
+        fontSize: 15,
         fontWeight: "700",
     },
     logoutButton: {
@@ -643,7 +753,7 @@ const styles = StyleSheet.create({
         backgroundColor: "#131927",
         paddingVertical: 16,
         borderRadius: 12,
-        borderWidth: 2,
+        borderWidth: 1.5,
         borderColor: "#ef4444",
         gap: 8,
     },

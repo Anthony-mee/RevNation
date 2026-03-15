@@ -3,43 +3,49 @@ import {
     View,
     Text,
     FlatList,
-    Dimensions,
     TextInput,
     StyleSheet,
     ActivityIndicator,
+    TouchableOpacity,
 } from "react-native";
 import EasyButton from "../../Shared/StyledComponents/EasyButton";
 import baseURL from "../../assets/common/baseurl";
 import axios from "axios";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 
-var { width } = Dimensions.get("window");
+const normalizeCategoryColor = (color) => {
+    const value = String(color || "").trim().toLowerCase();
+    if (!value || value === "#333" || value === "#333333") {
+        return "#fb923c";
+    }
+    return color;
+};
 
 const Item = ({ item, onEdit, onDelete, isDeleting }) => (
-    <View style={styles.item}>
-        <Text style={{ color: "#f1f5f9" }}>{item.name}</Text>
+    <View style={styles.itemCard}>
         <View style={styles.itemActions}>
+            <View style={styles.categoryLabelWrap}>
+                <View style={[styles.categoryDot, { backgroundColor: normalizeCategoryColor(item.color) }]} />
+                <Text style={styles.categoryName}>{item.name}</Text>
+            </View>
             <View>
-                <EasyButton
-                    primary
-                    medium
-                    onPress={() => onEdit(item)}
-                >
-                    <Text style={{ color: "white", fontWeight: "bold" }}>Edit</Text>
-                </EasyButton>
+                <TouchableOpacity style={styles.iconBtn} onPress={() => onEdit(item)}>
+                    <Ionicons name="create-outline" size={16} color="#fdba74" />
+                </TouchableOpacity>
             </View>
             <View style={styles.actionButton}>
-                <EasyButton
-                    danger
-                    medium
+                <TouchableOpacity
+                    style={[styles.iconBtn, styles.deleteBtn]}
                     onPress={() => onDelete(item.id || item._id)}
                 >
                     {isDeleting ? (
-                        <ActivityIndicator color="white" size="small" />
+                        <ActivityIndicator color="#ef4444" size="small" />
                     ) : (
-                        <Text style={{ color: "white", fontWeight: "bold" }}>Delete</Text>
+                        <Ionicons name="trash-outline" size={16} color="#ef4444" />
                     )}
-                </EasyButton>
+                </TouchableOpacity>
             </View>
         </View>
     </View>
@@ -114,8 +120,56 @@ const Categories = () => {
     };
 
     return (
-        <View style={{ position: "relative", height: "100%", backgroundColor: "#0b0f1a" }}>
-            <View style={{ marginBottom: 60 }}>
+        <View style={styles.screen}>
+            <LinearGradient
+                colors={["#131927", "#0f172a"]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.hero}
+            >
+                <Text style={styles.eyebrow}>Admin Workspace</Text>
+                <Text style={styles.title}>Categories</Text>
+                <Text style={styles.subtitle}>Organize your products with clean category groups.</Text>
+                <View style={styles.metaRow}>
+                    <View style={styles.metaPill}>
+                        <Ionicons name="layers-outline" size={14} color="#f8fafc" />
+                        <Text style={styles.metaText}>{categories.length} categories</Text>
+                    </View>
+                    {editingId ? (
+                        <View style={styles.metaPill}>
+                            <Ionicons name="create-outline" size={14} color="#f8fafc" />
+                            <Text style={styles.metaText}>Editing mode</Text>
+                        </View>
+                    ) : null}
+                </View>
+            </LinearGradient>
+
+            <View style={styles.formCard}>
+                <Text style={styles.formTitle}>{editingId ? "Update Category" : "Add Category"}</Text>
+                <TextInput
+                    value={categoryName}
+                    style={styles.input}
+                    onChangeText={setCategoryName}
+                    placeholder="Category name"
+                    placeholderTextColor="#64748b"
+                />
+                <View style={styles.formActions}>
+                    <EasyButton medium primary onPress={submitCategory}>
+                        {isSubmitting ? (
+                            <ActivityIndicator color="white" size="small" />
+                        ) : (
+                            <Text style={styles.formBtnText}>{editingId ? "Update" : "Submit"}</Text>
+                        )}
+                    </EasyButton>
+                    {editingId ? (
+                        <EasyButton medium secondary onPress={resetEdit}>
+                            <Text style={styles.formBtnText}>Cancel</Text>
+                        </EasyButton>
+                    ) : null}
+                </View>
+            </View>
+
+            <View style={styles.listWrap}>
                 <FlatList
                     data={categories}
                     renderItem={({ item, index }) => (
@@ -128,83 +182,172 @@ const Categories = () => {
                         />
                     )}
                     keyExtractor={(item) => String(item.id || item._id)}
+                    ListEmptyComponent={
+                        <View style={styles.emptyState}>
+                            <Ionicons name="pricetag-outline" size={36} color="#334155" />
+                            <Text style={styles.emptyTitle}>No categories yet</Text>
+                            <Text style={styles.emptyText}>Create your first category using the form above.</Text>
+                        </View>
+                    }
                 />
-            </View>
-            <View style={styles.bottomBar}>
-                <View><Text style={{ color: "#f1f5f9" }}>{editingId ? "Update Category" : "Add Category"}</Text></View>
-                <View style={{ width: width / 2.5 }}>
-                    <TextInput
-                        value={categoryName}
-                        style={styles.input}
-                        onChangeText={setCategoryName}
-                        placeholder="Category name"
-                    />
-                </View>
-                <View>
-                    <EasyButton medium primary onPress={submitCategory}>
-                        {isSubmitting ? (
-                            <ActivityIndicator color="white" size="small" />
-                        ) : (
-                            <Text style={{ color: "white", fontWeight: "bold" }}>
-                                {editingId ? "Update" : "Submit"}
-                            </Text>
-                        )}
-                    </EasyButton>
-                </View>
-                {editingId ? (
-                    <View>
-                        <EasyButton medium secondary onPress={resetEdit}>
-                            <Text style={{ color: "white", fontWeight: "bold" }}>Cancel</Text>
-                        </EasyButton>
-                    </View>
-                ) : null}
             </View>
         </View>
     );
 };
 
 const styles = StyleSheet.create({
-    bottomBar: {
-        backgroundColor: "#131927",
-        width: width,
-        height: 60,
-        padding: 2,
+    screen: {
+        flex: 1,
+        backgroundColor: "#080c17",
+        padding: 12,
+    },
+    hero: {
+        borderRadius: 20,
+        padding: 16,
+        borderWidth: 1,
+        borderColor: "rgba(251, 146, 60, 0.2)",
+        marginBottom: 12,
+    },
+    eyebrow: {
+        color: "#94a3b8",
+        fontSize: 12,
+        textTransform: "uppercase",
+        letterSpacing: 0.5,
+    },
+    title: {
+        color: "#f8fafc",
+        fontSize: 24,
+        fontWeight: "800",
+        marginTop: 4,
+    },
+    subtitle: {
+        color: "#94a3b8",
+        marginTop: 4,
+        fontSize: 13,
+        lineHeight: 18,
+    },
+    metaRow: {
+        flexDirection: "row",
+        gap: 8,
+        marginTop: 12,
+    },
+    metaPill: {
         flexDirection: "row",
         alignItems: "center",
-        justifyContent: "space-between",
-        position: "absolute",
-        bottom: 0,
-        left: 0,
+        gap: 5,
+        backgroundColor: "rgba(15, 23, 42, 0.8)",
+        borderWidth: 1,
+        borderColor: "rgba(148, 163, 184, 0.25)",
+        borderRadius: 999,
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+    },
+    metaText: {
+        color: "#f8fafc",
+        fontSize: 12,
+        fontWeight: "600",
+    },
+    formCard: {
+        backgroundColor: "#111827",
+        borderRadius: 16,
+        borderWidth: 1,
+        borderColor: "rgba(148, 163, 184, 0.16)",
+        padding: 12,
+        marginBottom: 12,
+    },
+    formTitle: {
+        color: "#f8fafc",
+        fontSize: 16,
+        fontWeight: "700",
+        marginBottom: 10,
     },
     input: {
-        height: 40,
+        height: 44,
         borderColor: "rgba(234, 88, 12, 0.3)",
         borderWidth: 1,
-        backgroundColor: "#0b0f1a",
+        backgroundColor: "#0b1220",
         color: "#f1f5f9",
-        paddingHorizontal: 8,
-        borderRadius: 6,
+        paddingHorizontal: 12,
+        borderRadius: 10,
+        fontSize: 15,
+        fontWeight: "500",
     },
-    item: {
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.2,
-        shadowRadius: 1,
-        elevation: 1,
-        padding: 5,
-        margin: 5,
-        backgroundColor: "#131927",
+    formActions: {
+        marginTop: 10,
         flexDirection: "row",
         alignItems: "center",
-        justifyContent: "space-between",
+        gap: 8,
+    },
+    formBtnText: {
+        color: "#fff",
+        fontWeight: "700",
+        fontSize: 14,
+    },
+    listWrap: {
+        flex: 1,
+    },
+    itemCard: {
+        backgroundColor: "#111827",
+        borderWidth: 1,
+        borderColor: "rgba(148, 163, 184, 0.16)",
+        borderRadius: 12,
+        padding: 12,
+        marginBottom: 8,
+    },
+    categoryLabelWrap: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 8,
+        flex: 1,
+    },
+    categoryDot: {
+        width: 10,
+        height: 10,
         borderRadius: 5,
+        borderWidth: 1,
+        borderColor: "#e2e8f0",
+    },
+    categoryName: {
+        color: "#f8fafc",
+        fontSize: 16,
+        fontWeight: "600",
     },
     itemActions: {
         flexDirection: "row",
         alignItems: "center",
+        justifyContent: "space-between",
+    },
+    iconBtn: {
+        width: 34,
+        height: 34,
+        borderRadius: 9,
+        borderWidth: 1,
+        borderColor: "rgba(148, 163, 184, 0.25)",
+        backgroundColor: "#0b1220",
+        alignItems: "center",
+        justifyContent: "center",
     },
     actionButton: {
-        marginLeft: 8,
+        marginLeft: 6,
+    },
+    deleteBtn: {
+        borderColor: "rgba(239, 68, 68, 0.35)",
+    },
+    emptyState: {
+        marginTop: 30,
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 8,
+    },
+    emptyTitle: {
+        color: "#f8fafc",
+        fontSize: 16,
+        fontWeight: "700",
+    },
+    emptyText: {
+        color: "#94a3b8",
+        fontSize: 13,
+        textAlign: "center",
     },
 });
 

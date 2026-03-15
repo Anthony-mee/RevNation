@@ -5,6 +5,8 @@ import { useNavigation } from "@react-navigation/native";
 import Orders from "../Screens/Admin/Orders";
 import Products from "../Screens/Admin/Products";
 import ProductForm from "../Screens/Admin/ProductForm";
+import Services from "../Screens/Admin/Services";
+import ServiceForm from "../Screens/Admin/ServiceForm";
 import Categories from "../Screens/Admin/Categories";
 import StockAlerts from "../Screens/Admin/StockAlerts";
 import AuthGlobal from "../Context/Store/AuthGlobal";
@@ -28,18 +30,20 @@ const AdminNavigator = () => {
 
     if (!isAdmin) {
         return (
-            <Stack.Navigator>
+            <Stack.Navigator screenOptions={{ headerShown: false }}>
                 <Stack.Screen name="NotAuthorized" component={NotAuthorized} options={{ title: "Admin" }} />
             </Stack.Navigator>
         );
     }
     return (
-        <Stack.Navigator>
+        <Stack.Navigator screenOptions={{ headerShown: false }}>
             <Stack.Screen name="Products" component={Products} options={{ title: "Products" }} />
             <Stack.Screen name="Categories" component={Categories} />
             <Stack.Screen name="Orders" component={Orders} />
+            <Stack.Screen name="Services" component={Services} />
             <Stack.Screen name="Stock Alerts" component={StockAlerts} />
             <Stack.Screen name="ProductForm" component={ProductForm} />
+            <Stack.Screen name="ServiceForm" component={ServiceForm} />
         </Stack.Navigator>
     );
 };

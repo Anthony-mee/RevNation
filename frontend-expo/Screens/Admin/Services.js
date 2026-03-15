@@ -11,17 +11,15 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import { Searchbar } from "react-native-paper";
-import ListItem from "./ListItem";
 import axios from "axios";
-import baseURL from "../../assets/common/baseurl";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { LinearGradient } from "expo-linear-gradient";
+import baseURL from "../../assets/common/baseurl";
+import ServiceListItem from "./ServiceListItem";
 
-const LOW_STOCK_THRESHOLD = 10;
-
-const Products = () => {
-    const [productList, setProductList] = useState([]);
-    const [productFilter, setProductFilter] = useState([]);
+const Services = () => {
+    const [serviceList, setServiceList] = useState([]);
+    const [serviceFilter, setServiceFilter] = useState([]);
     const [loading, setLoading] = useState(true);
     const [token, setToken] = useState("");
     const [refreshing, setRefreshing] = useState(false);
@@ -29,48 +27,61 @@ const Products = () => {
     const navigation = useNavigation();
 
     const stats = useMemo(() => {
-        const totalProducts = productList.length;
-        const featuredProducts = productList.filter((item) => item.isFeatured).length;
-        const lowStock = productList.filter((item) => Number(item.countInStock || 0) <= LOW_STOCK_THRESHOLD).length;
-        const categories = new Set(
-            productList
-                .map((item) => item.category?.id || item.category?._id)
-                .filter(Boolean)
-        ).size;
+        const totalServices = serviceList.length;
+        const featuredServices = serviceList.filter((item) => item.isFeatured).length;
+        const pricedServices = serviceList.filter((item) => Number(item.price || 0) > 0);
+        const averagePrice = pricedServices.length
+            ? pricedServices.reduce((sum, item) => sum + Number(item.price || 0), 0) / pricedServices.length
+            : 0;
 
         return {
-            totalProducts,
-            featuredProducts,
-            lowStock,
-            categories,
+            totalServices,
+            featuredServices,
+            averagePrice,
         };
-    }, [productList]);
+    }, [serviceList]);
 
-    const searchProduct = (text) => {
-        const query = String(text || "").trim();
-        if (query === "") {
-            setProductFilter(productList);
+    const fetchServices = useCallback(() => {
+        return axios
+            .get(`${baseURL}services`)
+            .then((res) => {
+                setServiceList(res.data || []);
+                setServiceFilter(res.data || []);
+            })
+            .catch(() => {
+                setServiceList([]);
+                setServiceFilter([]);
+            })
+            .finally(() => setLoading(false));
+    }, []);
+
+    const searchService = (text) => {
+        const query = String(text || "").trim().toLowerCase();
+        if (!query) {
+            setServiceFilter(serviceList);
             return;
         }
-        setProductFilter(
-            productList.filter((i) =>
-                String(i.name || "").toLowerCase().includes(query.toLowerCase())
-                || String(i.brand || "").toLowerCase().includes(query.toLowerCase())
+
+        setServiceFilter(
+            serviceList.filter((item) =>
+                String(item.name || "").toLowerCase().includes(query)
+                || String(item.description || "").toLowerCase().includes(query)
+                || String(item.duration || "").toLowerCase().includes(query)
             )
         );
     };
 
-    const deleteProduct = (id) => {
+    const deleteService = (id) => {
         if (deletingId) return;
         setDeletingId(id);
         axios
-            .delete(`${baseURL}products/${id}`, {
+            .delete(`${baseURL}services/${id}`, {
                 headers: { Authorization: `Bearer ${token}` },
             })
-            .then((res) => {
+            .then(() => {
                 const filter = (items) => items.filter((item) => (item.id || item._id) !== id);
-                setProductList((prev) => filter(prev));
-                setProductFilter((prev) => filter(prev));
+                setServiceList((prev) => filter(prev));
+                setServiceFilter((prev) => filter(prev));
             })
             .catch((error) => console.log(error))
             .finally(() => setDeletingId(null));
@@ -78,33 +89,23 @@ const Products = () => {
 
     const onRefresh = useCallback(() => {
         setRefreshing(true);
-        axios.get(`${baseURL}products?type=shop`).then((res) => {
-            setProductList(res.data);
-            setProductFilter(res.data);
-            setRefreshing(false);
-        });
-    }, []);
+        fetchServices().finally(() => setRefreshing(false));
+    }, [fetchServices]);
 
     useFocusEffect(
         useCallback(() => {
             AsyncStorage.getItem("jwt")
                 .then((res) => setToken(res || ""))
                 .catch((error) => console.log(error));
-            axios
-                .get(`${baseURL}products?type=shop`)
-                .then((res) => {
-                    setProductList(res.data);
-                    setProductFilter(res.data);
-                    setLoading(false);
-                })
-                .catch(() => setLoading(false));
+
+            fetchServices();
 
             return () => {
-                setProductList([]);
-                setProductFilter([]);
+                setServiceList([]);
+                setServiceFilter([]);
                 setLoading(true);
             };
-        }, [])
+        }, [fetchServices])
     );
 
     const DashboardHeader = () => (
@@ -118,74 +119,48 @@ const Products = () => {
                 <View style={styles.heroTopRow}>
                     <View>
                         <Text style={styles.heroEyebrow}>Admin Workspace</Text>
-                        <Text style={styles.heroTitle}>Products Dashboard</Text>
+                        <Text style={styles.heroTitle}>Services Dashboard</Text>
                     </View>
                     <TouchableOpacity
                         style={styles.primaryAction}
-                        onPress={() => navigation.navigate("ProductForm", { productType: "shop", returnScreen: "Products" })}
+                        onPress={() => navigation.navigate("ServiceForm", { returnScreen: "Services" })}
                         activeOpacity={0.85}
                     >
                         <Ionicons name="add" size={18} color="#0b0f1a" />
-                        <Text style={styles.primaryActionText}>New Product</Text>
+                        <Text style={styles.primaryActionText}>New Service</Text>
                     </TouchableOpacity>
                 </View>
 
                 <View style={styles.statsGrid}>
                     <View style={styles.statCard}>
-                        <Text style={styles.statValue}>{stats.totalProducts}</Text>
-                        <Text style={styles.statLabel}>Total Products</Text>
+                        <Text style={styles.statValue}>{stats.totalServices}</Text>
+                        <Text style={styles.statLabel}>Total Services</Text>
                     </View>
                     <View style={styles.statCard}>
-                        <Text style={styles.statValue}>{stats.categories}</Text>
-                        <Text style={styles.statLabel}>Categories</Text>
-                    </View>
-                    <View style={styles.statCard}>
-                        <Text style={styles.statValue}>{stats.featuredProducts}</Text>
+                        <Text style={styles.statValue}>{stats.featuredServices}</Text>
                         <Text style={styles.statLabel}>Featured</Text>
                     </View>
-                    <View style={styles.statCard}>
-                        <Text style={styles.statValue}>{stats.lowStock}</Text>
-                        <Text style={styles.statLabel}>Low Stock</Text>
+                    <View style={styles.statCardWide}>
+                        <Text style={styles.statValue}>${stats.averagePrice.toFixed(2)}</Text>
+                        <Text style={styles.statLabel}>Average Price</Text>
                     </View>
                 </View>
             </LinearGradient>
 
-            <View style={styles.quickActionsCard}>
-                <Text style={styles.sectionTitle}>Quick Actions</Text>
-                <View style={styles.quickActionsRow}>
-                    <TouchableOpacity style={styles.quickActionBtn} onPress={() => navigation.navigate("Orders")} activeOpacity={0.85}>
-                        <Ionicons name="bag-outline" size={16} color="#fb923c" />
-                        <Text style={styles.quickActionText}>Orders</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.quickActionBtn} onPress={() => navigation.navigate("Services")} activeOpacity={0.85}>
-                        <Ionicons name="construct-outline" size={16} color="#fb923c" />
-                        <Text style={styles.quickActionText}>Services</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.quickActionBtn} onPress={() => navigation.navigate("Categories")} activeOpacity={0.85}>
-                        <Ionicons name="pricetag-outline" size={16} color="#fb923c" />
-                        <Text style={styles.quickActionText}>Categories</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.quickActionBtn} onPress={() => navigation.navigate("Stock Alerts")} activeOpacity={0.85}>
-                        <Ionicons name="warning-outline" size={16} color="#fb923c" />
-                        <Text style={styles.quickActionText}>Stock Alerts</Text>
-                    </TouchableOpacity>
-                </View>
-            </View>
-
             <View style={styles.searchWrap}>
                 <Searchbar
-                    placeholder="Search by product or brand"
+                    placeholder="Search by service or duration"
                     placeholderTextColor="#94a3b8"
                     iconColor="#fb923c"
                     inputStyle={styles.searchInput}
                     style={styles.searchbar}
-                    onChangeText={(text) => searchProduct(text)}
+                    onChangeText={searchService}
                 />
             </View>
 
             <View style={styles.listHeaderRow}>
-                <Text style={styles.listTitle}>Shop Products</Text>
-                <Text style={styles.listCount}>{productFilter.length} items</Text>
+                <Text style={styles.listTitle}>All Services</Text>
+                <Text style={styles.listCount}>{serviceFilter.length} items</Text>
             </View>
         </View>
     );
@@ -193,17 +168,14 @@ const Products = () => {
     return (
         <View style={styles.screen}>
             <FlatList
-                refreshControl={
-                    <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#ea580c" />
-                }
+                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#ea580c" />}
                 ListHeaderComponent={<DashboardHeader />}
                 contentContainerStyle={styles.listContent}
-                data={loading ? [] : productFilter}
-                renderItem={({ item, index }) => (
-                    <ListItem
+                data={loading ? [] : serviceFilter}
+                renderItem={({ item }) => (
+                    <ServiceListItem
                         item={item}
-                        index={index}
-                        deleteProduct={deleteProduct}
+                        deleteService={deleteService}
                         isDeleting={deletingId === (item.id || item._id)}
                     />
                 )}
@@ -212,13 +184,13 @@ const Products = () => {
                     loading ? (
                         <View style={styles.spinner}>
                             <ActivityIndicator size="large" color="#ea580c" />
-                            <Text style={styles.loadingText}>Loading products...</Text>
+                            <Text style={styles.loadingText}>Loading services...</Text>
                         </View>
                     ) : (
                         <View style={styles.emptyState}>
-                            <Ionicons name="cube-outline" size={42} color="#334155" />
-                            <Text style={styles.emptyStateTitle}>No matching products</Text>
-                            <Text style={styles.emptyStateText}>Try another keyword or add a new product.</Text>
+                            <Ionicons name="construct-outline" size={42} color="#334155" />
+                            <Text style={styles.emptyStateTitle}>No matching services</Text>
+                            <Text style={styles.emptyStateText}>Try another keyword or add a new service.</Text>
                         </View>
                     )
                 }
@@ -291,6 +263,15 @@ const styles = StyleSheet.create({
         paddingVertical: 12,
         paddingHorizontal: 12,
     },
+    statCardWide: {
+        width: "100%",
+        backgroundColor: "rgba(15, 23, 42, 0.75)",
+        borderWidth: 1,
+        borderColor: "rgba(148, 163, 184, 0.2)",
+        borderRadius: 14,
+        paddingVertical: 12,
+        paddingHorizontal: 12,
+    },
     statValue: {
         color: "#f8fafc",
         fontSize: 22,
@@ -301,48 +282,15 @@ const styles = StyleSheet.create({
         marginTop: 2,
         fontSize: 12,
     },
-    quickActionsCard: {
+    searchWrap: {
         backgroundColor: "#111827",
         borderRadius: 18,
         borderWidth: 1,
         borderColor: "rgba(148, 163, 184, 0.16)",
-        padding: 14,
-    },
-    sectionTitle: {
-        color: "#f1f5f9",
-        fontSize: 16,
-        fontWeight: "700",
-        marginBottom: 12,
-    },
-    quickActionsRow: {
-        flexDirection: "row",
-        flexWrap: "wrap",
-        gap: 8,
-    },
-    quickActionBtn: {
-        minWidth: "48%",
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: 6,
-        backgroundColor: "#0b1220",
-        borderWidth: 1,
-        borderColor: "rgba(251, 146, 60, 0.3)",
-        paddingVertical: 12,
-        borderRadius: 12,
-    },
-    quickActionText: {
-        color: "#f8fafc",
-        fontSize: 12,
-        fontWeight: "700",
-    },
-    searchWrap: {
-        marginTop: 2,
+        padding: 12,
     },
     searchbar: {
-        backgroundColor: "#111827",
-        borderWidth: 1,
-        borderColor: "rgba(148, 163, 184, 0.2)",
+        backgroundColor: "#0f172a",
         borderRadius: 14,
         elevation: 0,
     },
@@ -354,8 +302,6 @@ const styles = StyleSheet.create({
         flexDirection: "row",
         justifyContent: "space-between",
         alignItems: "center",
-        marginTop: 6,
-        marginBottom: 10,
     },
     listTitle: {
         color: "#f8fafc",
@@ -371,9 +317,9 @@ const styles = StyleSheet.create({
         paddingBottom: 24,
     },
     spinner: {
-        flex: 1,
         alignItems: "center",
         justifyContent: "center",
+        paddingTop: 60,
         gap: 10,
     },
     loadingText: {
@@ -381,13 +327,13 @@ const styles = StyleSheet.create({
         fontSize: 13,
     },
     emptyState: {
-        marginTop: 60,
         alignItems: "center",
         justifyContent: "center",
+        paddingTop: 48,
         gap: 8,
     },
     emptyStateTitle: {
-        color: "#f1f5f9",
+        color: "#f8fafc",
         fontSize: 16,
         fontWeight: "700",
     },
@@ -397,4 +343,4 @@ const styles = StyleSheet.create({
     },
 });
 
-export default Products;
+export default Services;

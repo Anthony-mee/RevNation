@@ -3,7 +3,7 @@ const mongoose = require("mongoose");
 const categorySchema = new mongoose.Schema(
   {
     name: { type: String, required: true, trim: true, unique: true },
-    color: { type: String, default: "#333" },
+    color: { type: String, default: "#fb923c" },
     icon: { type: String, default: "" },
   },
   { timestamps: true }

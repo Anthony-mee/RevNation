@@ -4,6 +4,7 @@ const authJwt = require("../middleware/authJwt");
 const Order = require("../models/Order");
 const User = require("../models/User");
 const { sendToTokens } = require("../services/notifications");
+const { sendOrderReceiptEmail } = require("../services/emailService");
 
 const router = express.Router();
 
@@ -13,6 +14,30 @@ const STATUS = {
   DELIVERED: "delivered",
   CANCELLED: "cancelled",
 };
+
+const PAYMENT_METHODS = {
+  WALLET: "wallet",
+  COD: "cod",
+  CARD: "card",
+  BANK: "bank",
+};
+
+const SHIPPING_FEE = 159;
+
+function normalizePaymentMethod(value) {
+  const normalized = String(value || "").trim().toLowerCase();
+  if ([PAYMENT_METHODS.WALLET, PAYMENT_METHODS.COD, PAYMENT_METHODS.CARD, PAYMENT_METHODS.BANK].includes(normalized)) {
+    return normalized;
+  }
+  return PAYMENT_METHODS.COD;
+}
+
+function paymentMethodLabel(method) {
+  if (method === PAYMENT_METHODS.WALLET) return "RevNation Wallet";
+  if (method === PAYMENT_METHODS.CARD) return "Credit / Debit Card";
+  if (method === PAYMENT_METHODS.BANK) return "Bank Transfer";
+  return "Cash on Delivery";
+}
 
 function normalizeStatus(value) {
   if (!value) return "";
@@ -27,6 +52,7 @@ function normalizeStatus(value) {
 router.post("/", authJwt, async (req, res) => {
   try {
     const { orderItems } = req.body;
+    const paymentMethod = normalizePaymentMethod(req.body?.paymentMethod);
 
     if (!orderItems || orderItems.length === 0) {
       return res.status(400).json({ message: "Order must contain at least one item" });
@@ -72,11 +98,38 @@ router.post("/", authJwt, async (req, res) => {
       };
     });
 
-    // Calculate total price server-side to prevent tampering
-    const totalPrice = mappedItems.reduce(
+    // Calculate pricing server-side to prevent tampering.
+    const subtotalPrice = mappedItems.reduce(
       (sum, item) => sum + item.price * item.quantity,
       0
     );
+    const shippingPrice = subtotalPrice > 0 ? SHIPPING_FEE : 0;
+    const totalPrice = subtotalPrice + shippingPrice;
+
+    let paymentStatus = "pending";
+
+    if (paymentMethod === PAYMENT_METHODS.WALLET) {
+      const deductResult = await User.findOneAndUpdate(
+        {
+          _id: req.user.userId,
+          walletBalance: { $gte: totalPrice },
+        },
+        {
+          $inc: { walletBalance: -totalPrice },
+          $set: { walletLastUpdatedAt: new Date() },
+        },
+        { new: true }
+      ).lean();
+
+      if (!deductResult) {
+        return res.status(400).json({
+          message: "Insufficient RevNation Wallet balance",
+          code: "INSUFFICIENT_WALLET_BALANCE",
+        });
+      }
+
+      paymentStatus = "paid";
+    }
 
     const order = await Order.create({
       orderItems: mappedItems,
@@ -87,6 +140,11 @@ router.post("/", authJwt, async (req, res) => {
       country,
       phone,
       status: STATUS.PENDING,
+      paymentMethod,
+      paymentMethodLabel: paymentMethodLabel(paymentMethod),
+      paymentStatus,
+      subtotalPrice,
+      shippingPrice,
       totalPrice,
       user: req.user.userId,
       dateOrdered: new Date(),
@@ -102,7 +160,39 @@ router.post("/", authJwt, async (req, res) => {
       data: { orderId: order.id },
     });
 
-    return res.status(201).json(order);
+    let receiptEmail = {
+      attempted: false,
+      sent: false,
+      message: "No customer email on file.",
+    };
+
+    if (userProfile.email) {
+      receiptEmail.attempted = true;
+      try {
+        await sendOrderReceiptEmail({
+          to: userProfile.email,
+          name: userProfile.name,
+          order: order.toJSON(),
+        });
+        receiptEmail = {
+          attempted: true,
+          sent: true,
+          message: `Receipt email queued to ${userProfile.email}`,
+        };
+      } catch (emailError) {
+        console.error(`[orders] Receipt email failed for order ${order.id}:`, emailError.message);
+        receiptEmail = {
+          attempted: true,
+          sent: false,
+          message: emailError.message || "Receipt email failed to send",
+        };
+      }
+    }
+
+    return res.status(201).json({
+      ...order.toJSON(),
+      receiptEmail,
+    });
   } catch (error) {
     console.error("[orders] POST error:", error.message);
     return res.status(500).json({ message: error.message || "Failed to create order" });

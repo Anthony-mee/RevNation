@@ -7,6 +7,7 @@ import axios from "axios";
 import AuthGlobal from "../Context/Store/AuthGlobal";
 import { logoutUser } from "../Context/Actions/Auth.actions";
 import baseURL from "../assets/common/baseurl";
+import { resolveImageUrl } from "../assets/common/imageUrl";
 
 const DrawerContent = ({ navigation }) => {
     const [active, setActive] = useState("");
@@ -46,7 +47,7 @@ const DrawerContent = ({ navigation }) => {
                         <View style={styles.avatarContainer}>
                             {userProfile?.image ? (
                                 <Image 
-                                    source={{ uri: userProfile.image }} 
+                                    source={{ uri: resolveImageUrl(userProfile.image) }} 
                                     style={styles.avatar}
                                 />
                             ) : (
@@ -87,6 +88,11 @@ const DrawerContent = ({ navigation }) => {
                     label="Resell Products"
                     onPress={() => navigation.navigate("Main", { screen: "Home", params: { screen: "ResellProducts" } })}
                     icon="tag-multiple"
+                />
+                <Drawer.Item
+                    label="Services"
+                    onPress={() => navigation.navigate("Main", { screen: "Home", params: { screen: "Services" } })}
+                    icon="hammer-wrench"
                 />
                 <Drawer.Item
                     label="Cart"

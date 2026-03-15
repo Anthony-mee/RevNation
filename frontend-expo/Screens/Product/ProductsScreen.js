@@ -6,8 +6,8 @@ import {
     ScrollView,
     Text,
     TouchableOpacity,
-    FlatList,
     ActivityIndicator,
+    TextInput,
 } from "react-native";
 import { Searchbar } from "react-native-paper";
 import ProductList from "./ProductList";
@@ -18,6 +18,18 @@ import { Ionicons } from "@expo/vector-icons";
 import AuthGlobal from "../../Context/Store/AuthGlobal";
 
 var { height, width } = Dimensions.get("window");
+
+const normalizeId = (value) => {
+    if (!value) return "";
+    if (typeof value === "string") return value;
+    if (typeof value === "object") {
+        if (value.id) return String(value.id);
+        if (value._id) return String(value._id);
+    }
+    return String(value);
+};
+
+const getCategoryId = (item) => normalizeId(item?.category?.id || item?.category?._id || item?.category);
 
 const ProductsScreen = () => {
     const navigation = useNavigation();
@@ -32,6 +44,8 @@ const ProductsScreen = () => {
     const [selectedCategory, setSelectedCategory] = useState("all");
     const [filteredProducts, setFilteredProducts] = useState([]);
     const [searchQuery, setSearchQuery] = useState("");
+    const [minPrice, setMinPrice] = useState("");
+    const [maxPrice, setMaxPrice] = useState("");
     const [loading, setLoading] = useState(true);
     const [viewMode, setViewMode] = useState("grid"); // grid or list
 
@@ -63,22 +77,46 @@ const ProductsScreen = () => {
         }, [productType])
     );
 
-    const filterProducts = (category, query) => {
+    const filterProducts = (category, query, min, max) => {
         let filtered = products;
+        const parsedMin = Number(min);
+        const parsedMax = Number(max);
+        const hasMin = min !== "" && Number.isFinite(parsedMin);
+        const hasMax = max !== "" && Number.isFinite(parsedMax);
 
         // Filter by category
         if (category !== "all") {
+            const targetCategoryId = normalizeId(category);
             filtered = filtered.filter(
-                (item) => item.category?._id === category || item.category?.id === category
+                (item) => getCategoryId(item) === targetCategoryId
             );
         }
 
         // Filter by search query
         if (query) {
-            filtered = filtered.filter((item) =>
-                item.name.toLowerCase().includes(query.toLowerCase()) ||
-                item.brand?.toLowerCase().includes(query.toLowerCase())
-            );
+            const search = query.toLowerCase();
+            filtered = filtered.filter((item) => {
+                const productName = String(item.name || "").toLowerCase();
+                const brandName = String(item.brand || "").toLowerCase();
+                const categoryName = String(item.category?.name || "").toLowerCase();
+                const description = String(item.description || "").toLowerCase();
+
+                return (
+                    productName.includes(search)
+                    || brandName.includes(search)
+                    || categoryName.includes(search)
+                    || description.includes(search)
+                );
+            });
+        }
+
+        // Filter by price range
+        if (hasMin) {
+            filtered = filtered.filter((item) => Number(item.price || 0) >= parsedMin);
+        }
+
+        if (hasMax) {
+            filtered = filtered.filter((item) => Number(item.price || 0) <= parsedMax);
         }
 
         setFilteredProducts(filtered);
@@ -86,12 +124,22 @@ const ProductsScreen = () => {
 
     const handleCategoryChange = (categoryId) => {
         setSelectedCategory(categoryId);
-        filterProducts(categoryId, searchQuery);
+        filterProducts(categoryId, searchQuery, minPrice, maxPrice);
     };
 
     const handleSearch = (query) => {
         setSearchQuery(query);
-        filterProducts(selectedCategory, query);
+        filterProducts(selectedCategory, query, minPrice, maxPrice);
+    };
+
+    const handleMinPriceChange = (value) => {
+        setMinPrice(value);
+        filterProducts(selectedCategory, searchQuery, value, maxPrice);
+    };
+
+    const handleMaxPriceChange = (value) => {
+        setMaxPrice(value);
+        filterProducts(selectedCategory, searchQuery, minPrice, value);
     };
 
     const CategoryChip = ({ category, isSelected }) => (
@@ -107,140 +155,170 @@ const ProductsScreen = () => {
 
     return (
         <View style={styles.container}>
-            {/* Header */}
-            <View style={styles.header}>
-                <View style={styles.headerTop}>
-                    <View>
-                        <Text style={styles.headerTitle}>{productType === "resell" ? "Resell Products" : "Shop Products"}</Text>
-                        <Text style={styles.headerSubtitle}>
-                            {filteredProducts.length} {filteredProducts.length === 1 ? 'product' : 'products'} available
-                        </Text>
-                    </View>
-                    <View style={styles.viewToggle}>
-                        <TouchableOpacity
-                            style={[styles.viewButton, viewMode === "grid" && styles.viewButtonActive]}
-                            onPress={() => setViewMode("grid")}
-                        >
-                            <Ionicons 
-                                name="grid-outline" 
-                                size={20} 
-                                color={viewMode === "grid" ? "#ffffff" : "#94a3b8"} 
-                            />
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                            style={[styles.viewButton, viewMode === "list" && styles.viewButtonActive]}
-                            onPress={() => setViewMode("list")}
-                        >
-                            <Ionicons 
-                                name="list-outline" 
-                                size={20} 
-                                color={viewMode === "list" ? "#ffffff" : "#94a3b8"} 
-                            />
-                        </TouchableOpacity>
-                    </View>
-                </View>
-
-                {canAddHere && (
-                    <TouchableOpacity
-                        style={styles.addProductButton}
-                        onPress={() => {
-                            if (productType === "resell") {
-                                navigation.navigate("ResellProductForm", { productType: "resell", returnScreen: "ResellProducts" });
-                                return;
-                            }
-                            navigation.navigate("Admin");
-                        }}
-                    >
-                        <Ionicons name="add-circle-outline" size={18} color="#ffffff" />
-                        <Text style={styles.addProductText}>
-                            {productType === "resell" ? "Add Resell Product" : "Add Shop Product"}
-                        </Text>
-                    </TouchableOpacity>
-                )}
-
-                {/* Search Bar */}
-                <Searchbar
-                    placeholder="Search products..."
-                    onChangeText={handleSearch}
-                    value={searchQuery}
-                    style={styles.searchBar}
-                    iconColor="#60a5fa"
-                    inputStyle={styles.searchInput}
-                    placeholderTextColor="#64748b"
-                    theme={{ colors: { text: '#ffffff' } }}
-                />
-
-                {/* Category Filter */}
-                <ScrollView 
-                    horizontal 
-                    showsHorizontalScrollIndicator={false}
-                    style={styles.categoriesScroll}
-                    contentContainerStyle={styles.categoriesContainer}
-                >
-                    <TouchableOpacity
-                        style={[styles.categoryChip, selectedCategory === "all" && styles.categoryChipActive]}
-                        onPress={() => handleCategoryChange("all")}
-                    >
-                        <Text style={[styles.categoryChipText, selectedCategory === "all" && styles.categoryChipTextActive]}>
-                            All Products
-                        </Text>
-                    </TouchableOpacity>
-                    {categories.map((cat) => (
-                        <CategoryChip
-                            key={cat.id || cat._id}
-                            category={cat}
-                            isSelected={selectedCategory === (cat.id || cat._id)}
-                        />
-                    ))}
-                </ScrollView>
-            </View>
-
-            {/* Products Grid/List */}
             {loading ? (
                 <View style={styles.loadingContainer}>
                     <ActivityIndicator size="large" color="#60a5fa" />
                     <Text style={styles.loadingText}>Loading products...</Text>
                 </View>
-            ) : filteredProducts.length > 0 ? (
+            ) : (
                 <ScrollView 
-                    style={styles.productsScroll}
-                    contentContainerStyle={styles.productsContainer}
+                    style={styles.pageScroll}
+                    contentContainerStyle={styles.pageContent}
                     showsVerticalScrollIndicator={false}
                 >
-                    <View style={viewMode === "grid" ? styles.productsGrid : styles.productsList}>
-                        {filteredProducts.map((item) => (
-                            <View 
-                                key={item.id || item._id} 
-                                style={viewMode === "grid" ? styles.gridItem : styles.listItem}
-                            >
-                                <ProductList item={item} />
+                    <View style={styles.header}>
+                        <View style={styles.headerTop}>
+                            <View>
+                                <Text style={styles.headerTitle}>{productType === "resell" ? "Resell Products" : "Shop Products"}</Text>
+                                <Text style={styles.headerSubtitle}>
+                                    {filteredProducts.length} {filteredProducts.length === 1 ? 'product' : 'products'} available
+                                </Text>
                             </View>
-                        ))}
-                    </View>
-                </ScrollView>
-            ) : (
-                <View style={styles.emptyContainer}>
-                    <Ionicons name="search-outline" size={80} color="#475569" />
-                    <Text style={styles.emptyTitle}>No Products Found</Text>
-                    <Text style={styles.emptySubtitle}>
-                        {searchQuery 
-                            ? `No results for "${searchQuery}"`
-                            : "Try selecting a different category"
-                        }
-                    </Text>
-                    {(searchQuery || selectedCategory !== "all") && (
-                        <TouchableOpacity
-                            style={styles.resetButton}
-                            onPress={() => {
-                                setSearchQuery("");
-                                setSelectedCategory("all");
-                                setFilteredProducts(products);
-                            }}
+                            <View style={styles.viewToggle}>
+                                <TouchableOpacity
+                                    style={[styles.viewButton, viewMode === "grid" && styles.viewButtonActive]}
+                                    onPress={() => setViewMode("grid")}
+                                >
+                                    <Ionicons 
+                                        name="grid-outline" 
+                                        size={20} 
+                                        color={viewMode === "grid" ? "#ffffff" : "#94a3b8"} 
+                                    />
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    style={[styles.viewButton, viewMode === "list" && styles.viewButtonActive]}
+                                    onPress={() => setViewMode("list")}
+                                >
+                                    <Ionicons 
+                                        name="list-outline" 
+                                        size={20} 
+                                        color={viewMode === "list" ? "#ffffff" : "#94a3b8"} 
+                                    />
+                                </TouchableOpacity>
+                            </View>
+                        </View>
+
+                        {canAddHere && (
+                            <TouchableOpacity
+                                style={styles.addProductButton}
+                                onPress={() => {
+                                    if (productType === "resell") {
+                                        navigation.navigate("ResellProductForm", { productType: "resell", returnScreen: "ResellProducts" });
+                                        return;
+                                    }
+                                    navigation.navigate("Admin");
+                                }}
+                            >
+                                <Ionicons name="add-circle-outline" size={18} color="#ffffff" />
+                                <Text style={styles.addProductText}>
+                                    {productType === "resell" ? "Add Resell Product" : "Add Shop Product"}
+                                </Text>
+                            </TouchableOpacity>
+                        )}
+
+                        <Searchbar
+                            placeholder="Search products..."
+                            onChangeText={handleSearch}
+                            value={searchQuery}
+                            style={styles.searchBar}
+                            iconColor="#60a5fa"
+                            inputStyle={styles.searchInput}
+                            placeholderTextColor="#64748b"
+                            theme={{ colors: { text: '#ffffff' } }}
+                        />
+
+                        <View style={styles.priceFilterCard}>
+                            <Text style={styles.priceFilterTitle}>Price Range</Text>
+                            <View style={styles.priceInputsRow}>
+                                <View style={styles.priceInputWrap}>
+                                    <Text style={styles.priceInputLabel}>Min</Text>
+                                    <TextInput
+                                        value={minPrice}
+                                        onChangeText={handleMinPriceChange}
+                                        keyboardType="numeric"
+                                        placeholder="0"
+                                        placeholderTextColor="#64748b"
+                                        style={styles.priceInput}
+                                    />
+                                </View>
+                                <View style={styles.priceInputWrap}>
+                                    <Text style={styles.priceInputLabel}>Max</Text>
+                                    <TextInput
+                                        value={maxPrice}
+                                        onChangeText={handleMaxPriceChange}
+                                        keyboardType="numeric"
+                                        placeholder="Any"
+                                        placeholderTextColor="#64748b"
+                                        style={styles.priceInput}
+                                    />
+                                </View>
+                            </View>
+                        </View>
+
+                        <ScrollView 
+                            horizontal 
+                            showsHorizontalScrollIndicator={false}
+                            style={styles.categoriesScroll}
+                            contentContainerStyle={styles.categoriesContainer}
                         >
-                            <Text style={styles.resetButtonText}>Clear Filters</Text>
-                        </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[styles.categoryChip, selectedCategory === "all" && styles.categoryChipActive]}
+                                onPress={() => handleCategoryChange("all")}
+                            >
+                                <Text style={[styles.categoryChipText, selectedCategory === "all" && styles.categoryChipTextActive]}>
+                                    All Products
+                                </Text>
+                            </TouchableOpacity>
+                            {categories.map((cat) => (
+                                <CategoryChip
+                                    key={cat.id || cat._id}
+                                    category={cat}
+                                    isSelected={selectedCategory === (cat.id || cat._id)}
+                                />
+                            ))}
+                        </ScrollView>
+                    </View>
+
+                    {filteredProducts.length > 0 ? (
+                        <View style={styles.productsContainer}>
+                            <View style={viewMode === "grid" ? styles.productsGrid : styles.productsList}>
+                                {filteredProducts.map((item) => (
+                                    <View 
+                                        key={item.id || item._id} 
+                                        style={viewMode === "grid" ? styles.gridItem : styles.listItem}
+                                    >
+                                        <ProductList item={item} />
+                                    </View>
+                                ))}
+                            </View>
+                        </View>
+                    ) : (
+                        <View style={styles.emptyContainer}>
+                            <Ionicons name="search-outline" size={80} color="#475569" />
+                            <Text style={styles.emptyTitle}>No Products Found</Text>
+                            <Text style={styles.emptySubtitle}>
+                                {searchQuery 
+                                    ? `No results for "${searchQuery}"`
+                                    : "Try selecting a different category"
+                                }
+                            </Text>
+                            {(searchQuery || selectedCategory !== "all") && (
+                                <TouchableOpacity
+                                    style={styles.resetButton}
+                                    onPress={() => {
+                                        setSearchQuery("");
+                                        setSelectedCategory("all");
+                                        setMinPrice("");
+                                        setMaxPrice("");
+                                        setFilteredProducts(products);
+                                    }}
+                                >
+                                    <Text style={styles.resetButtonText}>Clear Filters</Text>
+                                </TouchableOpacity>
+                            )}
+                        </View>
                     )}
-                </View>
+                </ScrollView>
             )}
         </View>
     );
@@ -250,6 +328,13 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: "#0b0f1a",
+    },
+    pageScroll: {
+        flex: 1,
+        backgroundColor: "#0b0f1a",
+    },
+    pageContent: {
+        paddingBottom: 100,
     },
     header: {
         backgroundColor: "#131927",
@@ -297,6 +382,44 @@ const styles = StyleSheet.create({
     searchInput: {
         fontSize: 14,
         color: "#ffffff",
+    },
+    priceFilterCard: {
+        borderWidth: 1,
+        borderColor: "rgba(234, 88, 12, 0.2)",
+        backgroundColor: "#0b0f1a",
+        borderRadius: 12,
+        padding: 12,
+        marginBottom: 12,
+    },
+    priceFilterTitle: {
+        color: "#f1f5f9",
+        fontSize: 13,
+        fontWeight: "700",
+        marginBottom: 8,
+        textTransform: "uppercase",
+        letterSpacing: 0.4,
+    },
+    priceInputsRow: {
+        flexDirection: "row",
+        gap: 10,
+    },
+    priceInputWrap: {
+        flex: 1,
+    },
+    priceInputLabel: {
+        color: "#94a3b8",
+        fontSize: 12,
+        marginBottom: 4,
+    },
+    priceInput: {
+        backgroundColor: "#131927",
+        color: "#ffffff",
+        borderRadius: 10,
+        borderWidth: 1,
+        borderColor: "rgba(148, 163, 184, 0.22)",
+        paddingHorizontal: 10,
+        paddingVertical: 8,
+        fontSize: 14,
     },
     addProductButton: {
         marginBottom: 12,
@@ -353,13 +476,8 @@ const styles = StyleSheet.create({
         fontSize: 16,
         color: "#94a3b8",
     },
-    productsScroll: {
-        flex: 1,
-        backgroundColor: "#0b0f1a",
-    },
     productsContainer: {
         padding: 12,
-        paddingBottom: 100,
     },
     productsGrid: {
         flexDirection: "row",
@@ -378,10 +496,10 @@ const styles = StyleSheet.create({
         marginBottom: 16,
     },
     emptyContainer: {
-        flex: 1,
         justifyContent: "center",
         alignItems: "center",
         paddingHorizontal: 40,
+        paddingVertical: 56,
         backgroundColor: "#0b0f1a",
     },
     emptyTitle: {

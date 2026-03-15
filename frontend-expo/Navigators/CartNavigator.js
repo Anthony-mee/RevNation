@@ -7,9 +7,9 @@ const Stack = createStackNavigator();
 
 function MyStack() {
     return (
-        <Stack.Navigator>
-            <Stack.Screen name="Cart" component={Cart} options={{ headerShown: false }} />
-            <Stack.Screen name="Checkout" component={CheckoutNavigator} options={{ title: "Checkout" }} />
+        <Stack.Navigator screenOptions={{ headerShown: false }}>
+            <Stack.Screen name="Cart" component={Cart} />
+            <Stack.Screen name="Checkout" component={CheckoutNavigator} />
         </Stack.Navigator>
     );
 }

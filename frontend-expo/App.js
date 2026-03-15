@@ -10,6 +10,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { Provider as PaperProvider } from 'react-native-paper';
 import { Provider } from 'react-redux';
 import store from './Redux/store';
+import { hydrateCartFromStorage } from './Redux/Actions/cartActions';
 import Toast from 'react-native-toast-message';
 import Auth from './Context/Store/Auth';
 import DrawerNavigator from './Navigators/DrawerNavigator';
@@ -34,6 +35,10 @@ Notifications.setNotificationHandler({
 // Inner component that can access Auth context (it's INSIDE the <Auth> provider)
 function AppInner() {
   const context = useContext(AuthGlobal);
+
+  useEffect(() => {
+    store.dispatch(hydrateCartFromStorage());
+  }, []);
 
   useEffect(() => {
     if (Platform.OS === 'android') {
