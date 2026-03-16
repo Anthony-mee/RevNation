@@ -4,7 +4,7 @@ const authJwt = require("../middleware/authJwt");
 const Order = require("../models/Order");
 const User = require("../models/User");
 const { sendToTokens } = require("../services/notifications");
-const { sendOrderReceiptEmail } = require("../services/emailService");
+const { sendOrderReceiptEmail, sendOrderStatusUpdateEmail } = require("../services/emailService");
 
 const router = express.Router();
 
@@ -150,10 +150,8 @@ router.post("/", authJwt, async (req, res) => {
       dateOrdered: new Date(),
     });
 
-    const admins = await User.find({ isAdmin: true, pushToken: { $ne: "" } }, "pushToken pushTokenType").lean();
-    const adminTokens = admins
-      .filter((a) => a.pushToken)
-      .map((a) => ({ token: a.pushToken, type: a.pushTokenType || "fcm" }));
+    const admins = await User.find({ isAdmin: true }, "pushToken pushTokenType pushTokens").lean();
+    const adminTokens = admins.flatMap((admin) => User.collectActivePushTargets(admin));
     await sendToTokens(adminTokens, {
       title: "New order placed",
       body: `Order ${order.id} has been placed.`,
@@ -263,8 +261,8 @@ router.put("/:id", authJwt, async (req, res) => {
     }
 
     const adminTransitions = {
-      [STATUS.PENDING]: [STATUS.SHIPPED, STATUS.CANCELLED],
-      [STATUS.SHIPPED]: [STATUS.CANCELLED],
+      [STATUS.PENDING]: [STATUS.SHIPPED, STATUS.DELIVERED, STATUS.CANCELLED],
+      [STATUS.SHIPPED]: [STATUS.DELIVERED, STATUS.CANCELLED],
       [STATUS.DELIVERED]: [],
       [STATUS.CANCELLED]: [],
     };
@@ -292,16 +290,51 @@ router.put("/:id", authJwt, async (req, res) => {
       { new: true }
     ).populate("user", "id name email");
 
-    const recipient = await User.findById(existing.user).lean();
-    if (recipient?.pushToken) {
-      await sendToTokens([{ token: recipient.pushToken, type: recipient.pushTokenType || "fcm" }], {
+    const recipient = await User.findById(existing.user, "pushToken pushTokenType pushTokens email name").lean();
+    const recipientTokens = recipient ? User.collectActivePushTargets(recipient) : [];
+    if (recipientTokens.length > 0) {
+      await sendToTokens(recipientTokens, {
         title: "Order status updated",
         body: `Order ${updated.id} is now ${desiredStatus}.`,
         data: { orderId: updated.id, status: desiredStatus },
       });
     }
 
-    return res.status(200).json(updated);
+    let statusEmail = {
+      attempted: false,
+      sent: false,
+      message: "No customer email on file.",
+    };
+
+    if (recipient?.email) {
+      statusEmail.attempted = true;
+      try {
+        await sendOrderStatusUpdateEmail({
+          to: recipient.email,
+          name: recipient.name,
+          order: updated.toJSON(),
+          previousStatus: currentStatus,
+          nextStatus: desiredStatus,
+        });
+        statusEmail = {
+          attempted: true,
+          sent: true,
+          message: `Status update email queued to ${recipient.email}`,
+        };
+      } catch (emailError) {
+        console.error(`[orders] Status email failed for order ${updated.id}:`, emailError.message);
+        statusEmail = {
+          attempted: true,
+          sent: false,
+          message: emailError.message || "Status update email failed to send",
+        };
+      }
+    }
+
+    return res.status(200).json({
+      ...updated.toJSON(),
+      statusEmail,
+    });
   } catch (_error) {
     return res.status(500).json({ message: "Failed to update order" });
   }

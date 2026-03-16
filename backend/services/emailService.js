@@ -189,7 +189,52 @@ async function sendVerificationEmail({ to, name, verificationUrl }) {
   return info;
 }
 
+async function sendOrderStatusUpdateEmail({ to, name, order, previousStatus, nextStatus }) {
+  const transporter = getTransport();
+  if (!transporter) {
+    throw new Error("Mailtrap is not configured. Set MAILTRAP_HOST and either MAILTRAP_PASS or MAILTRAP_API_TOKEN (plus MAILTRAP_USER, or use default 'api').");
+  }
+
+  const recipientName = escapeHtml(name || "Customer");
+  const orderId = escapeHtml(order?.id || order?._id || "");
+  const fromStatus = escapeHtml(String(previousStatus || "").toUpperCase());
+  const toStatus = escapeHtml(String(nextStatus || "").toUpperCase());
+  const orderDate = formatDate(order?.dateOrdered);
+
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 640px; margin: 0 auto; color: #111827;">
+      <div style="background:#fff7ed; border:1px solid #fed7aa; border-radius:16px; padding:20px;">
+        <h2 style="margin:0 0 10px 0; color:#9a3412;">Order Status Updated</h2>
+        <p style="margin:0 0 14px 0; color:#334155;">Hi ${recipientName}, your order status has changed.</p>
+        <p style="margin:0 0 8px 0;"><strong>Order:</strong> #${orderId}</p>
+        <p style="margin:0 0 8px 0;"><strong>Date Ordered:</strong> ${orderDate}</p>
+        <p style="margin:0 0 8px 0;"><strong>Previous Status:</strong> ${fromStatus || "N/A"}</p>
+        <p style="margin:0 0 0 0;"><strong>Current Status:</strong> ${toStatus || "N/A"}</p>
+      </div>
+    </div>
+  `;
+
+  const info = await transporter.sendMail({
+    from: config.emailFrom,
+    to,
+    subject: `RevNation Order Update - #${order?.id || order?._id || ""}`,
+    html,
+    text: [
+      `Hi ${name || "Customer"},`,
+      "",
+      `Your order #${order?.id || order?._id || ""} status has been updated.`,
+      `Previous: ${String(previousStatus || "").toUpperCase() || "N/A"}`,
+      `Current: ${String(nextStatus || "").toUpperCase() || "N/A"}`,
+      `Date Ordered: ${orderDate}`,
+    ].join("\n"),
+  });
+
+  console.log(`[email] Status update email queued to ${to}. messageId=${info?.messageId || "n/a"}`);
+  return info;
+}
+
 module.exports = {
   sendVerificationEmail,
   sendOrderReceiptEmail,
+  sendOrderStatusUpdateEmail,
 };

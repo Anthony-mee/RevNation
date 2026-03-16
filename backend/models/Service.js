@@ -7,6 +7,8 @@ const serviceSchema = new mongoose.Schema(
     richDescription: { type: String, default: "" },
     image: { type: String, default: "" },
     price: { type: Number, required: true, default: 0 },
+    rating: { type: Number, default: 0 },
+    numReviews: { type: Number, default: 0 },
     duration: { type: String, default: "" },
     isFeatured: { type: Boolean, default: false },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },

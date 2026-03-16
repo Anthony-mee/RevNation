@@ -17,8 +17,8 @@ const STATUS = {
 };
 
 const adminTransitions = {
-    [STATUS.PENDING]: [STATUS.SHIPPED, STATUS.CANCELLED],
-    [STATUS.SHIPPED]: [STATUS.CANCELLED],
+    [STATUS.PENDING]: [STATUS.SHIPPED, STATUS.DELIVERED, STATUS.CANCELLED],
+    [STATUS.SHIPPED]: [STATUS.DELIVERED, STATUS.CANCELLED],
     [STATUS.DELIVERED]: [],
     [STATUS.CANCELLED]: [],
 };
@@ -122,6 +122,8 @@ const OrderCard = ({ item, update, isAdmin = false }) => {
     const allowed = (transitions[currentStatus] || []).slice().sort(
         (left, right) => STATUS_DISPLAY_ORDER.indexOf(left) - STATUS_DISPLAY_ORDER.indexOf(right)
     );
+    const allowedSet = new Set(allowed);
+    const dropdownStatuses = STATUS_DISPLAY_ORDER.slice();
 
     return (
         <View style={styles.card}>
@@ -169,7 +171,7 @@ const OrderCard = ({ item, update, isAdmin = false }) => {
                     <Text style={styles.priceLabel}>Total:</Text>
                     <Text style={styles.price}>P {Number(item.totalPrice || 0).toFixed(2)}</Text>
                 </View>
-                {update && allowed.length > 0 ? (
+                {update ? (
                     <View style={styles.updateSection}>
                         <Picker
                             style={styles.picker}
@@ -177,8 +179,14 @@ const OrderCard = ({ item, update, isAdmin = false }) => {
                             selectedValue={statusChange}
                             onValueChange={(e) => setStatusChange(e)}
                         >
-                            {allowed.map((value) => (
-                                <Picker.Item key={value} label={formatStatusLabel(value)} value={value} color="#f8fafc" />
+                            {dropdownStatuses.map((value) => (
+                                <Picker.Item
+                                    key={value}
+                                    label={formatStatusLabel(value)}
+                                    value={value}
+                                    color="#f8fafc"
+                                    enabled={value !== currentStatus && allowedSet.has(value)}
+                                />
                             ))}
                         </Picker>
                         <EasyButton secondary large onPress={() => updateOrder()}>

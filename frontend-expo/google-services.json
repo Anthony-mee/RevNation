@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "149350867139",
+    "project_id": "revnation-8b916",
+    "storage_bucket": "revnation-8b916.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:149350867139:android:5b15df2261a7fa79fbc276",
+        "android_client_info": {
+          "package_name": "com.peakplay.itcp239"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "149350867139-adcm1spa9lebod4f8h3u69bsbhsm557a.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.peakplay.itcp239",
+            "certificate_hash": "6986fa24c2aef253559c6c2142940f6d4fe548af"
+          }
+        },
+        {
+          "client_id": "149350867139-r5q67endg3ip9k024imq8oj07gf2700e.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC28hdOQNz_laZfM51T9p2IQQGUQTLmmC0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "149350867139-r5q67endg3ip9k024imq8oj07gf2700e.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

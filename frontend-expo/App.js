@@ -19,6 +19,7 @@ import * as Device from 'expo-device';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import baseURL from './assets/common/baseurl';
 import AuthGlobal from './Context/Store/AuthGlobal';
+import { getAuthToken } from './assets/common/tokenStorage';
 
 import Constants from 'expo-constants';
 
@@ -105,7 +106,7 @@ function AppInner() {
         // Always clear old cached token to force re-registration
         await AsyncStorage.removeItem('pushToken');
 
-        const jwt = await AsyncStorage.getItem('jwt');
+        const jwt = await getAuthToken();
         if (!jwt) {
           console.log('[Push] No JWT found, skipping backend registration');
           return;

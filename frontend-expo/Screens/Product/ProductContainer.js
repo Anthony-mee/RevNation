@@ -11,12 +11,14 @@ import {
 } from "react-native";
 import { Surface } from "react-native-paper";
 import { Ionicons } from "@expo/vector-icons";
+import { useSelector, useDispatch } from "react-redux";
 import ProductList from "./ProductList";
 import CategoryFilter from "./CategoryFilter";
 import axios from "axios";
 import baseURL from "../../assets/common/baseurl";
 import { resolveImageUrl } from "../../assets/common/imageUrl";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
+import { fetchProducts } from "../../Redux/Actions/productActions";
 
 var { height, width } = Dimensions.get("window");
 const isWeb = Platform.OS === "web";
@@ -52,21 +54,30 @@ const COLORS = {
 
 const ProductContainer = () => {
     const navigation = useNavigation();
-    const [products, setProducts] = useState([]);
+    const dispatch = useDispatch();
+
+    // ── Redux state for products ──
+    const { items: reduxProducts, loading: productsLoading } = useSelector((state) => state.products);
+
     const [categories, setCategories] = useState([]);
     const [active, setActive] = useState(-1);
-    const [initialState, setInitialState] = useState([]);
     const [productsCtg, setProductsCtg] = useState([]);
     const [featuredProducts, setFeaturedProducts] = useState([]);
 
+    // Keep derived lists in sync whenever the Redux products list changes
+    React.useEffect(() => {
+        setProductsCtg(reduxProducts);
+        setFeaturedProducts(reduxProducts.filter((p) => p.isFeatured));
+    }, [reduxProducts]);
+
     const changeCtg = (ctg) => {
         if (ctg === "all") {
-            setProductsCtg(initialState);
+            setProductsCtg(reduxProducts);
             setActive(true);
         } else {
             const targetCategoryId = normalizeId(ctg);
             setProductsCtg(
-                products.filter((i) => getCategoryId(i) === targetCategoryId)
+                reduxProducts.filter((i) => getCategoryId(i) === targetCategoryId)
             );
             setActive(true);
         }
@@ -75,15 +86,8 @@ const ProductContainer = () => {
     useFocusEffect(
         useCallback(() => {
             setActive(-1);
-            axios
-                .get(`${baseURL}products?type=shop`)
-                .then((res) => {
-                    setProducts(res.data);
-                    setProductsCtg(res.data);
-                    setInitialState(res.data);
-                    setFeaturedProducts(res.data.filter((p) => p.isFeatured));
-                })
-                .catch((error) => console.log("Api call error"));
+            // Dispatch Redux thunk — products are stored in the global store
+            dispatch(fetchProducts("shop"));
 
             axios
                 .get(`${baseURL}categories`)
@@ -91,11 +95,9 @@ const ProductContainer = () => {
                 .catch((error) => console.log("Api categories call error"));
 
             return () => {
-                setProducts([]);
                 setCategories([]);
-                setInitialState([]);
             };
-        }, [])
+        }, [dispatch])
     );
 
     return (

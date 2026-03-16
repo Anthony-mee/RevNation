@@ -5,9 +5,15 @@ import { legacy_createStore as createStore, combineReducers, applyMiddleware } f
 import { thunk } from 'redux-thunk';
 
 import cartItems from './Reducers/cartItems';
+import products  from './Reducers/products';
+import orders    from './Reducers/orders';
+import reviews   from './Reducers/reviews';
 
 const reducers = combineReducers({
     cartItems: cartItems,
+    products:  products,
+    orders:    orders,
+    reviews:   reviews,
 });
 
 const store = createStore(reducers, applyMiddleware(thunk));

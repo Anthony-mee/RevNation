@@ -4,11 +4,11 @@
  */
 import React, { useEffect, useReducer, useState } from "react";
 import { jwtDecode } from "jwt-decode";
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import authReducer from "../Reducers/Auth.reducer";
 import { setCurrentUser } from "../Actions/Auth.actions";
 import AuthGlobal from './AuthGlobal';
+import { getAuthToken, removeAuthToken } from "../../assets/common/tokenStorage";
 
 const Auth = props => {
     const [stateUser, dispatch] = useReducer(authReducer, {
@@ -23,12 +23,12 @@ const Auth = props => {
         const initializeAuth = async () => {
             setShowChild(true);
             try {
-                const token = await AsyncStorage.getItem("jwt");
+                const token = await getAuthToken();
                 if (token && isMounted) {
                     dispatch(setCurrentUser(jwtDecode(token)));
                 }
             } catch (error) {
-                await AsyncStorage.removeItem("jwt");
+                await removeAuthToken();
             }
         };
 

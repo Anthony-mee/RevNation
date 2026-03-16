@@ -2,6 +2,7 @@ import { jwtDecode } from "jwt-decode";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Toast from "react-native-toast-message";
 import baseURL from "../../assets/common/baseurl";
+import { setAuthToken, getAuthToken, removeAuthToken } from "../../assets/common/tokenStorage";
 
 export const SET_CURRENT_USER = "SET_CURRENT_USER";
 
@@ -23,7 +24,7 @@ export const loginUser = (user, dispatch) => {
                 throw new Error("Login failed: missing token");
             }
 
-            await AsyncStorage.setItem("jwt", data.token);
+            await setAuthToken(data.token);
             const decoded = jwtDecode(data.token);
             dispatch(setCurrentUser(decoded, data?.user || user));
             return data;
@@ -62,9 +63,28 @@ export const getUserProfile = (id) => {
         .then((data) => console.log(data));
 };
 
-export const logoutUser = (dispatch) => {
-    AsyncStorage.removeItem("jwt");
-    dispatch(setCurrentUser({}));
+export const logoutUser = async (dispatch) => {
+    try {
+        const jwt = await getAuthToken();
+        const pushToken = await AsyncStorage.getItem("pushToken");
+
+        if (jwt && pushToken) {
+            await fetch(`${baseURL}users/push-token`, {
+                method: "DELETE",
+                headers: {
+                    Accept: "application/json",
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${jwt}`,
+                },
+                body: JSON.stringify({ token: pushToken }),
+            }).catch(() => null);
+        }
+
+        await AsyncStorage.removeItem("pushToken");
+        await removeAuthToken();
+    } finally {
+        dispatch(setCurrentUser({}));
+    }
 };
 
 export const setCurrentUser = (decoded, user) => {

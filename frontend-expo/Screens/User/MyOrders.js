@@ -1,50 +1,31 @@
-import React, { useCallback, useContext, useState } from "react";
+import React, { useCallback, useContext } from "react";
 import { View, FlatList, Text, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import axios from "axios";
-import baseURL from "../../assets/common/baseurl";
+import { useSelector, useDispatch } from "react-redux";
 import AuthGlobal from "../../Context/Store/AuthGlobal";
 import OrderCard from "../../Shared/OrderCard";
+import { fetchMyOrders } from "../../Redux/Actions/orderActions";
 
 const MyOrders = () => {
-    const [orderList, setOrderList] = useState([]);
-    const [loading, setLoading] = useState(true);
+    const dispatch = useDispatch();
+    // ── Redux state for orders ──
+    const { items: orderList, loading } = useSelector((state) => state.orders);
     const context = useContext(AuthGlobal);
     const navigation = useNavigation();
 
     useFocusEffect(
         useCallback(() => {
-            let isMounted = true;
-
             if (context.stateUser.isAuthenticated === false || context.stateUser.isAuthenticated === null) {
                 navigation.navigate("User", { screen: "Login" });
                 return () => {};
             }
 
-            AsyncStorage.getItem("jwt")
-                .then((res) =>
-                    axios.get(`${baseURL}orders`, {
-                        headers: { Authorization: `Bearer ${res || ""}` },
-                    })
-                )
-                .then((res) => {
-                    if (isMounted) {
-                        setOrderList(res.data || []);
-                        setLoading(false);
-                    }
-                })
-                .catch(() => {
-                    if (isMounted) setLoading(false);
-                });
+            // Dispatch Redux thunk — orders are stored in the global store
+            dispatch(fetchMyOrders());
 
-            return () => {
-                isMounted = false;
-                setOrderList([]);
-                setLoading(true);
-            };
-        }, [context.stateUser.isAuthenticated, navigation])
+            return () => {};
+        }, [context.stateUser.isAuthenticated, navigation, dispatch])
     );
 
     if (loading) {

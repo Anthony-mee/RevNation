@@ -2,6 +2,7 @@ const express = require("express");
 const path = require("path");
 const fs = require("fs");
 const crypto = require("crypto");
+const https = require("https");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const multer = require("multer");
@@ -54,6 +55,58 @@ function createEmailVerificationToken() {
   const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
   const expiresAt = new Date(Date.now() + config.emailVerifyTtlHours * 60 * 60 * 1000);
   return { token, tokenHash, expiresAt };
+}
+
+const PUSH_TOKEN_TTL_DAYS = 90;
+const PUSH_TOKEN_MAX_PER_USER = 8;
+
+// Fetch Google user info using an OAuth access token
+function fetchGoogleUserInfo(accessToken) {
+  return new Promise((resolve, reject) => {
+    const req = https.request(
+      {
+        hostname: "www.googleapis.com",
+        path: "/oauth2/v3/userinfo",
+        method: "GET",
+        headers: { Authorization: `Bearer ${accessToken}` },
+      },
+      (res) => {
+        let raw = "";
+        res.on("data", (chunk) => { raw += chunk; });
+        res.on("end", () => {
+          try {
+            const parsed = JSON.parse(raw);
+            if (res.statusCode !== 200) {
+              reject(new Error(parsed.error_description || parsed.error || "Google userinfo request failed"));
+            } else {
+              resolve(parsed);
+            }
+          } catch (e) {
+            reject(e);
+          }
+        });
+      }
+    );
+    req.on("error", reject);
+    req.end();
+  });
+}
+
+function prunePushTokens(tokens) {
+  const now = Date.now();
+  const maxAgeMs = PUSH_TOKEN_TTL_DAYS * 24 * 60 * 60 * 1000;
+
+  const active = Array.isArray(tokens)
+    ? tokens.filter((entry) => {
+      if (!entry?.token) return false;
+      if (entry?.invalidatedAt) return false;
+      const lastSeenMs = new Date(entry.lastSeenAt || 0).getTime();
+      return Number.isFinite(lastSeenMs) && now - lastSeenMs <= maxAgeMs;
+    })
+    : [];
+
+  active.sort((a, b) => new Date(b.lastSeenAt || 0).getTime() - new Date(a.lastSeenAt || 0).getTime());
+  return active.slice(0, PUSH_TOKEN_MAX_PER_USER);
 }
 
 router.post("/register", upload.single("image"), async (req, res) => {
@@ -501,16 +554,149 @@ router.post("/push-token", authJwt, async (req, res) => {
       return res.status(400).json({ message: "Push token is required" });
     }
 
-    const tokenType = type || (token.startsWith("ExponentPushToken") ? "expo" : "fcm");
-    console.log(`[POST /push-token] Saving ${tokenType} push token for user ${req.user.userId}: ${token.substring(0, 30)}...`);
-    await User.findByIdAndUpdate(req.user.userId, {
-      pushToken: String(token),
-      pushTokenType: tokenType,
+    const rawToken = String(token).trim();
+    const tokenType = User.normalizePushTokenType(rawToken, type);
+    console.log(`[POST /push-token] Saving ${tokenType} push token for user ${req.user.userId}: ${rawToken.substring(0, 30)}...`);
+
+    const user = await User.findById(req.user.userId);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    const currentTokens = Array.isArray(user.pushTokens) ? user.pushTokens : [];
+    const now = new Date();
+    const existingIndex = currentTokens.findIndex((entry) => String(entry?.token || "") === rawToken);
+
+    if (existingIndex >= 0) {
+      currentTokens[existingIndex] = {
+        ...currentTokens[existingIndex].toObject?.(),
+        token: rawToken,
+        type: tokenType,
+        lastSeenAt: now,
+        invalidatedAt: null,
+        invalidReason: "",
+      };
+    } else {
+      currentTokens.push({
+        token: rawToken,
+        type: tokenType,
+        lastSeenAt: now,
+        invalidatedAt: null,
+        invalidReason: "",
+      });
+    }
+
+    user.pushTokens = prunePushTokens(currentTokens);
+    // Keep legacy fields in sync for older code paths.
+    user.pushToken = rawToken;
+    user.pushTokenType = tokenType;
+    await user.save();
+
+    return res.status(200).json({
+      success: true,
+      activePushTokens: user.pushTokens.length,
     });
-    return res.status(200).json({ success: true });
   } catch (error) {
     console.error('[POST /push-token] Error:', error.message);
     return res.status(500).json({ message: "Failed to save push token" });
+  }
+});
+
+// POST /users/login/google — verify Google access token and issue app JWT
+router.post("/login/google", async (req, res) => {
+  try {
+    const rawToken = String(req.body?.accessToken || "").trim();
+    if (!rawToken) {
+      return res.status(400).json({ message: "accessToken is required" });
+    }
+
+    let googleUser;
+    try {
+      googleUser = await fetchGoogleUserInfo(rawToken);
+    } catch (_err) {
+      return res.status(401).json({ message: "Invalid or expired Google access token" });
+    }
+
+    const email = String(googleUser.email || "").trim().toLowerCase();
+    if (!email || !googleUser.email_verified) {
+      return res.status(400).json({ message: "Google account does not have a verified email" });
+    }
+
+    let user = await User.findOne({ email });
+
+    if (user) {
+      // Link to Google if not already done
+      if (user.authProvider !== "google") {
+        user.authProvider = "google";
+        user.providerId = googleUser.sub || "";
+        user.emailVerified = true;
+        await user.save();
+      }
+    } else {
+      // Create a new user — password is a random unusable hash
+      const passwordHash = await bcrypt.hash(crypto.randomBytes(32).toString("hex"), 10);
+      user = await User.create({
+        name: String(googleUser.name || email.split("@")[0]).trim(),
+        email,
+        passwordHash,
+        phone: "",
+        authProvider: "google",
+        providerId: googleUser.sub || "",
+        emailVerified: true,
+        image: googleUser.picture || "",
+      });
+    }
+
+    const payload = {
+      userId: user.id,
+      email: user.email,
+      isAdmin: user.isAdmin,
+    };
+
+    const token = jwt.sign(payload, config.jwtSecret, { expiresIn: config.jwtExpiresIn });
+    return res.status(200).json({ token, user: payload });
+  } catch (err) {
+    console.error("[POST /users/login/google] Error:", err.message);
+    return res.status(500).json({ message: "Google login failed" });
+  }
+});
+
+// DELETE /users/push-token — remove one or all push tokens for the current user
+router.delete("/push-token", authJwt, async (req, res) => {
+  try {
+    const token = String(req.body?.token || "").trim();
+    const removeAll = req.body?.removeAll === true;
+
+    const user = await User.findById(req.user.userId);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    if (removeAll) {
+      user.pushTokens = [];
+      user.pushToken = "";
+      user.pushTokenType = "";
+      await user.save();
+      return res.status(200).json({ success: true, removed: "all" });
+    }
+
+    if (!token) {
+      return res.status(400).json({ message: "token is required unless removeAll is true" });
+    }
+
+    user.pushTokens = (Array.isArray(user.pushTokens) ? user.pushTokens : [])
+      .filter((entry) => String(entry?.token || "") !== token);
+
+    if (String(user.pushToken || "") === token) {
+      user.pushToken = "";
+      user.pushTokenType = "";
+    }
+
+    await user.save();
+    return res.status(200).json({ success: true, removed: token });
+  } catch (error) {
+    console.error('[DELETE /push-token] Error:', error.message);
+    return res.status(500).json({ message: "Failed to remove push token" });
   }
 });
 

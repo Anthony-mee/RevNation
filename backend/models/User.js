@@ -1,5 +1,16 @@
 const mongoose = require("mongoose");
 
+const pushTokenSchema = new mongoose.Schema(
+  {
+    token: { type: String, required: true, trim: true },
+    type: { type: String, enum: ["fcm", "expo", "unknown"], default: "unknown" },
+    lastSeenAt: { type: Date, default: Date.now },
+    invalidatedAt: { type: Date, default: null },
+    invalidReason: { type: String, default: "" },
+  },
+  { _id: false }
+);
+
 const userSchema = new mongoose.Schema(
   {
     name: { type: String, required: true, trim: true },
@@ -24,11 +35,83 @@ const userSchema = new mongoose.Schema(
     },
     pushToken: { type: String, default: "" },
     pushTokenType: { type: String, enum: ["fcm", "expo", "unknown", ""], default: "" },
+    pushTokens: { type: [pushTokenSchema], default: [] },
     walletBalance: { type: Number, default: 0, min: 0 },
     walletLastUpdatedAt: { type: Date, default: null },
   },
   { timestamps: true }
 );
+
+function normalizePushTokenType(token, type) {
+  if (type === "expo" || type === "fcm" || type === "unknown") {
+    return type;
+  }
+  if (typeof token === "string" && token.startsWith("ExponentPushToken")) {
+    return "expo";
+  }
+  return "fcm";
+}
+
+userSchema.statics.normalizePushTokenType = normalizePushTokenType;
+
+userSchema.statics.collectActivePushTargets = function collectActivePushTargets(userDoc) {
+  const targets = [];
+  const seen = new Set();
+
+  const activeTokens = Array.isArray(userDoc?.pushTokens)
+    ? userDoc.pushTokens.filter((entry) => entry?.token && !entry?.invalidatedAt)
+    : [];
+
+  for (const entry of activeTokens) {
+    const token = String(entry.token);
+    if (!token || seen.has(token)) continue;
+    seen.add(token);
+    targets.push({ token, type: normalizePushTokenType(token, entry.type) });
+  }
+
+  // Backward compatibility for legacy single-token users.
+  if (userDoc?.pushToken) {
+    const token = String(userDoc.pushToken);
+    if (token && !seen.has(token)) {
+      targets.push({ token, type: normalizePushTokenType(token, userDoc.pushTokenType) });
+    }
+  }
+
+  return targets;
+};
+
+userSchema.statics.removeInvalidPushTokens = async function removeInvalidPushTokens(invalidTokens) {
+  if (!Array.isArray(invalidTokens) || invalidTokens.length === 0) {
+    return { modifiedCount: 0 };
+  }
+
+  const uniqueTokens = [...new Set(invalidTokens.filter(Boolean).map((token) => String(token)))];
+  if (uniqueTokens.length === 0) {
+    return { modifiedCount: 0 };
+  }
+
+  const now = new Date();
+
+  await this.updateMany(
+    { "pushTokens.token": { $in: uniqueTokens } },
+    {
+      $set: {
+        "pushTokens.$[entry].invalidatedAt": now,
+        "pushTokens.$[entry].invalidReason": "DeviceNotRegistered",
+      },
+    },
+    {
+      arrayFilters: [{ "entry.token": { $in: uniqueTokens } }],
+    }
+  );
+
+  const legacy = await this.updateMany(
+    { pushToken: { $in: uniqueTokens } },
+    { $set: { pushToken: "", pushTokenType: "" } }
+  );
+
+  return { modifiedCount: Number(legacy?.modifiedCount || 0) };
+};
 
 userSchema.virtual("id").get(function idGetter() {
   return this._id.toString();

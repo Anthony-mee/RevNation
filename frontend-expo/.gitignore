@@ -1,9 +1,6 @@
 node_modules/
 .expo/
 
-# Firebase Android config — contains your project credentials
-google-services.json
-
 # Expo local config
 .expo-shared/
 

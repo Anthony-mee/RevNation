@@ -2,11 +2,21 @@ import React, { useState, useContext, useEffect } from "react";
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Image } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
+import * as Google from "expo-auth-session/providers/google";
+import * as WebBrowser from "expo-web-browser";
+import { jwtDecode } from "jwt-decode";
 import FormContainer from "../../Shared/FormContainer";
 import AuthGlobal from "../../Context/Store/AuthGlobal";
-import { loginUser } from "../../Context/Actions/Auth.actions";
+import { loginUser, setCurrentUser } from "../../Context/Actions/Auth.actions";
+import { setAuthToken } from "../../assets/common/tokenStorage";
+import baseURL from "../../assets/common/baseurl";
 import Input from "../../Shared/Input";
 import Toast from "react-native-toast-message";
+
+WebBrowser.maybeCompleteAuthSession();
+
+const ANDROID_CLIENT_ID = "149350867139-adcm1spa9lebod4f8h3u69bsbhsm557a.apps.googleusercontent.com";
+const WEB_CLIENT_ID = "149350867139-r5q67endg3ip9k024imq8oj07gf2700e.apps.googleusercontent.com";
 
 const Login = () => {
     const context = useContext(AuthGlobal);
@@ -15,6 +25,61 @@ const Login = () => {
     const [password, setPassword] = useState("");
     const [error, setError] = useState("");
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+
+    const [, googleResponse, promptGoogleAsync] = Google.useAuthRequest({
+        androidClientId: ANDROID_CLIENT_ID,
+        webClientId: WEB_CLIENT_ID,
+    });
+
+    // Handle Google OAuth response
+    useEffect(() => {
+        if (googleResponse?.type === "success") {
+            const accessToken = googleResponse.authentication?.accessToken;
+            if (accessToken) {
+                handleGoogleToken(accessToken);
+            } else {
+                Toast.show({
+                    topOffset: 60,
+                    type: "error",
+                    text1: "Google Sign-In Failed",
+                    text2: "No access token received",
+                });
+            }
+        } else if (googleResponse?.type === "error") {
+            Toast.show({
+                topOffset: 60,
+                type: "error",
+                text1: "Google Sign-In Failed",
+                text2: googleResponse.error?.message || "Please try again",
+            });
+        }
+    }, [googleResponse]);
+
+    const handleGoogleToken = async (accessToken) => {
+        setIsGoogleLoading(true);
+        try {
+            const res = await fetch(`${baseURL}users/login/google`, {
+                method: "POST",
+                headers: { Accept: "application/json", "Content-Type": "application/json" },
+                body: JSON.stringify({ accessToken }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data?.message || "Google login failed");
+            await setAuthToken(data.token);
+            const decoded = jwtDecode(data.token);
+            context.dispatch(setCurrentUser(decoded, data.user));
+        } catch (err) {
+            Toast.show({
+                topOffset: 60,
+                type: "error",
+                text1: "Google Sign-In Failed",
+                text2: String(err?.message || "Please try again"),
+            });
+        } finally {
+            setIsGoogleLoading(false);
+        }
+    };
 
     const handleSubmit = () => {
         const user = { email, password };
@@ -28,12 +93,7 @@ const Login = () => {
     };
 
     const handleGoogleLogin = () => {
-        Toast.show({
-            topOffset: 60,
-            type: "info",
-            text1: "Google Login",
-            text2: "Google authentication coming soon",
-        });
+        promptGoogleAsync();
     };
 
     const handleFacebookLogin = () => {
@@ -114,12 +174,19 @@ const Login = () => {
                 
                 <View style={styles.socialButtons}>
                     <TouchableOpacity 
-                        style={styles.googleButton}
+                        style={[styles.googleButton, isGoogleLoading && styles.buttonDisabled]}
                         onPress={handleGoogleLogin}
+                        disabled={isGoogleLoading}
                         activeOpacity={0.85}
                     >
-                        <Ionicons name="logo-google" size={20} color="#ffffff" />
-                        <Text style={styles.socialButtonText}>Continue with Google</Text>
+                        {isGoogleLoading ? (
+                            <ActivityIndicator size="small" color="#ffffff" />
+                        ) : (
+                            <Ionicons name="logo-google" size={20} color="#ffffff" />
+                        )}
+                        <Text style={styles.socialButtonText}>
+                            {isGoogleLoading ? "Signing in..." : "Continue with Google"}
+                        </Text>
                     </TouchableOpacity>
                     
                     <TouchableOpacity 

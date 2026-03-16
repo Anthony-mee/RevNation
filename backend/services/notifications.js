@@ -2,6 +2,7 @@ const admin = require("firebase-admin");
 const fs = require("fs");
 const path = require("path");
 const config = require("../config");
+const User = require("../models/User");
 
 let firebaseInitialized = false;
 
@@ -29,7 +30,7 @@ function initFirebase() {
 // Send via Firebase Cloud Messaging (for FCM device tokens from APK)
 async function sendFCM(tokens, title, body, data) {
   initFirebase();
-  if (!firebaseInitialized || tokens.length === 0) return;
+  if (!firebaseInitialized || tokens.length === 0) return [];
 
   const message = {
     tokens,
@@ -47,14 +48,34 @@ async function sendFCM(tokens, title, body, data) {
   try {
     const result = await admin.messaging().sendEachForMulticast(message);
     console.log(`[notifications] FCM sent: ${result.successCount} success, ${result.failureCount} failed`);
+
+    const staleCodes = new Set([
+      "messaging/invalid-registration-token",
+      "messaging/registration-token-not-registered",
+      "messaging/mismatched-credential",
+      "messaging/invalid-argument",
+    ]);
+    const staleTokens = [];
+
+    for (let i = 0; i < result.responses.length; i += 1) {
+      const response = result.responses[i];
+      if (response?.success) continue;
+      const code = response?.error?.code || "";
+      if (staleCodes.has(code) && tokens[i]) {
+        staleTokens.push(tokens[i]);
+      }
+    }
+
+    return staleTokens;
   } catch (error) {
     console.warn("[notifications] FCM send error:", error.message);
+    return [];
   }
 }
 
 // Send via Expo Push API (for Expo Push Tokens from Expo Go)
 async function sendExpo(tokens, title, body, data) {
-  if (tokens.length === 0) return;
+  if (tokens.length === 0) return [];
 
   const messages = tokens.map((token) => ({
     to: token,
@@ -76,8 +97,22 @@ async function sendExpo(tokens, title, body, data) {
     });
     const result = await response.json();
     console.log(`[notifications] Expo push sent to ${tokens.length} token(s):`, JSON.stringify(result.data?.map(d => d.status) || result));
+
+    const staleTokens = [];
+    if (Array.isArray(result?.data)) {
+      for (let i = 0; i < result.data.length; i += 1) {
+        const item = result.data[i] || {};
+        const detailsError = String(item?.details?.error || "");
+        if (detailsError === "DeviceNotRegistered" && tokens[i]) {
+          staleTokens.push(tokens[i]);
+        }
+      }
+    }
+
+    return staleTokens;
   } catch (error) {
     console.warn("[notifications] Expo push error:", error.message);
+    return [];
   }
 }
 
@@ -114,7 +149,20 @@ async function sendToTokens(tokens, payload) {
   if (fcmTokens.length > 0) promises.push(sendFCM(fcmTokens, title, body, data));
   if (expoTokens.length > 0) promises.push(sendExpo(expoTokens, title, body, data));
 
-  await Promise.allSettled(promises);
+  const settled = await Promise.allSettled(promises);
+  const staleTokens = [];
+
+  for (const result of settled) {
+    if (result.status !== "fulfilled") continue;
+    if (Array.isArray(result.value)) {
+      staleTokens.push(...result.value);
+    }
+  }
+
+  if (staleTokens.length > 0) {
+    await User.removeInvalidPushTokens(staleTokens);
+    console.log(`[notifications] Invalidated ${staleTokens.length} stale push token(s)`);
+  }
 }
 
 module.exports = { sendToTokens };

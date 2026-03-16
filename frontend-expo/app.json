@@ -2,6 +2,7 @@
   "expo": {
     "name": "frontend-expo",
     "slug": "frontend-expo",
+    "scheme": "revnation",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -27,13 +28,14 @@
     "web": {
       "favicon": "./assets/favicon.png"
     },
-    "extra": {
-      "eas": {
-        "projectId": "6f747b51-b33e-4c6e-9d11-89bf760ec81a"
-      }
-    },
     "plugins": [
       "expo-web-browser"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "c1fc75f7-b878-4076-8bf6-4b7fc35f0762"
+      }
+    },
+    "owner": "richardainthony"
   }
 }

@@ -6,6 +6,8 @@ const mongoose = require("mongoose");
 const authJwt = require("../middleware/authJwt");
 const Category = require("../models/Category");
 const Product = require("../models/Product");
+const Review = require("../models/Review");
+const Order = require("../models/Order");
 const StockAlert = require("../models/StockAlert");
 const User = require("../models/User");
 const { sendToTokens } = require("../services/notifications");
@@ -57,10 +59,8 @@ const STOCK_LOW_THRESHOLD = 10;
 
 async function notifyAdmins(title, body) {
   try {
-    const admins = await User.find({ isAdmin: true, pushToken: { $ne: "" } }, "pushToken pushTokenType").lean();
-    const tokens = admins
-      .filter((a) => a.pushToken)
-      .map((a) => ({ token: a.pushToken, type: a.pushTokenType || "fcm" }));
+    const admins = await User.find({ isAdmin: true }, "pushToken pushTokenType pushTokens").lean();
+    const tokens = admins.flatMap((admin) => User.collectActivePushTargets(admin));
     console.log(`[notifyAdmins] Sending to ${tokens.length} admin(s): "${title}"`);
     await sendToTokens(tokens, { title, body });
   } catch (error) {
@@ -146,6 +146,64 @@ async function resolveValidCategory(categoryId) {
   return Category.findById(categoryId).lean();
 }
 
+function normalizeRating(value) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return null;
+  const rounded = Math.round(parsed);
+  if (rounded < 1 || rounded > 5) return null;
+  return rounded;
+}
+
+async function hasVerifiedPurchase(userId, productId) {
+  const purchased = await Order.exists({
+    user: userId,
+    status: { $in: ["shipped", "delivered"] },
+    "orderItems.product": productId,
+  });
+  return Boolean(purchased);
+}
+
+async function updateProductReviewAggregate(productId) {
+  const [stats] = await Review.aggregate([
+    { $match: { targetType: "product", targetId: new mongoose.Types.ObjectId(productId) } },
+    {
+      $group: {
+        _id: null,
+        averageRating: { $avg: "$rating" },
+        reviewCount: { $sum: 1 },
+      },
+    },
+  ]);
+
+  const rating = stats?.averageRating ? Number(stats.averageRating.toFixed(2)) : 0;
+  const numReviews = stats?.reviewCount || 0;
+
+  await Product.findByIdAndUpdate(productId, { rating, numReviews });
+}
+
+function normalizeReviewForResponse(req, reviewDoc) {
+  const json = reviewDoc.toJSON();
+  json.image = normalizeImageUrl(req, json.image);
+
+  const comments = Array.isArray(json.comments) ? json.comments : [];
+  json.comments = comments.map((comment) => ({
+    ...comment,
+    image: normalizeImageUrl(req, comment.image),
+  }));
+
+  if (json.comments.length === 0 && (json.comment || json.image)) {
+    json.comments = [{
+      id: `legacy-${json.id}`,
+      text: json.comment || "",
+      image: json.image || "",
+      createdAt: json.createdAt,
+      updatedAt: json.updatedAt,
+    }];
+  }
+
+  return json;
+}
+
 // GET /products — public, used by home screen
 router.get("/", async (req, res) => {
   try {
@@ -162,6 +220,264 @@ router.get("/", async (req, res) => {
     return res.status(200).json(normalized);
   } catch (_error) {
     return res.status(500).json({ message: "Failed to load products" });
+  }
+});
+
+// GET /products/:id/reviews — public
+router.get("/:id/reviews", async (req, res) => {
+  try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ message: "Invalid product id" });
+    }
+
+    const reviews = await Review.find({ targetType: "product", targetId: req.params.id })
+      .populate("user", "id name image")
+      .sort({ createdAt: -1 });
+    const normalized = reviews.map((review) => normalizeReviewForResponse(req, review));
+
+    return res.status(200).json(normalized);
+  } catch (_error) {
+    return res.status(500).json({ message: "Failed to load reviews" });
+  }
+});
+
+// POST /products/:id/reviews — authenticated, verified purchase required
+router.post("/:id/reviews", authJwt, uploadSingleImage, async (req, res) => {
+  try {
+    const productId = req.params.id;
+    if (!mongoose.Types.ObjectId.isValid(productId)) {
+      return res.status(400).json({ message: "Invalid product id" });
+    }
+
+    const product = await Product.findById(productId).lean();
+    if (!product) {
+      return res.status(404).json({ message: "Product not found" });
+    }
+
+    const rating = normalizeRating(req.body?.rating);
+    if (!rating) {
+      return res.status(400).json({ message: "rating must be a whole number between 1 and 5" });
+    }
+
+    const alreadyReviewed = await Review.findOne({
+      user: req.user.userId,
+      targetType: "product",
+      targetId: productId,
+    }).lean();
+    if (alreadyReviewed) {
+      return res.status(409).json({ message: "You already reviewed this product. Use update instead." });
+    }
+
+    const purchased = await hasVerifiedPurchase(req.user.userId, productId);
+    if (!purchased) {
+      return res.status(403).json({ message: "Only verified buyers can review this product" });
+    }
+
+    const created = await Review.create({
+      user: req.user.userId,
+      targetType: "product",
+      targetId: productId,
+      rating,
+      comment: String(req.body?.comment || "").trim(),
+      image: req.file ? buildImageUrl(req, req.file.filename) : "",
+      comments: (String(req.body?.comment || "").trim() || req.file)
+        ? [{ text: String(req.body?.comment || "").trim(), image: req.file ? buildImageUrl(req, req.file.filename) : "" }]
+        : [],
+    });
+
+    await updateProductReviewAggregate(productId);
+
+    const populated = await created.populate("user", "id name image");
+    return res.status(201).json(normalizeReviewForResponse(req, populated));
+  } catch (error) {
+    if (error?.code === 11000) {
+      return res.status(409).json({ message: "You already reviewed this product" });
+    }
+    return res.status(500).json({ message: error.message || "Failed to create review" });
+  }
+});
+
+// PUT /products/:id/reviews/me — authenticated owner update (rating is one-time)
+router.put("/:id/reviews/me", authJwt, uploadSingleImage, async (req, res) => {
+  try {
+    const productId = req.params.id;
+    if (!mongoose.Types.ObjectId.isValid(productId)) {
+      return res.status(400).json({ message: "Invalid product id" });
+    }
+
+    const existing = await Review.findOne({
+      user: req.user.userId,
+      targetType: "product",
+      targetId: productId,
+    });
+
+    if (!existing) {
+      return res.status(404).json({ message: "Your review for this product was not found" });
+    }
+
+    if (req.body?.rating !== undefined) {
+      const nextRating = normalizeRating(req.body.rating);
+      if (!nextRating) {
+        return res.status(400).json({ message: "rating must be a whole number between 1 and 5" });
+      }
+      if (Number(nextRating) !== Number(existing.rating)) {
+        return res.status(409).json({ message: "Rating can only be set once. Add/edit comments instead." });
+      }
+    }
+
+    if (req.body?.comment !== undefined) {
+      existing.comment = String(req.body.comment || "").trim();
+    }
+
+    if (req.file) {
+      existing.image = buildImageUrl(req, req.file.filename);
+    } else if (req.body?.removeImage === "true" || req.body?.removeImage === true) {
+      existing.image = "";
+    }
+
+    await existing.save();
+    await updateProductReviewAggregate(productId);
+    const populated = await existing.populate("user", "id name image");
+    return res.status(200).json(normalizeReviewForResponse(req, populated));
+  } catch (error) {
+    return res.status(500).json({ message: error.message || "Failed to update review" });
+  }
+});
+
+// POST /products/:id/reviews/me/comments — add comment under existing one-time rating
+router.post("/:id/reviews/me/comments", authJwt, uploadSingleImage, async (req, res) => {
+  try {
+    const productId = req.params.id;
+    if (!mongoose.Types.ObjectId.isValid(productId)) {
+      return res.status(400).json({ message: "Invalid product id" });
+    }
+
+    const existing = await Review.findOne({
+      user: req.user.userId,
+      targetType: "product",
+      targetId: productId,
+    });
+
+    if (!existing) {
+      return res.status(404).json({ message: "Create your rating first before adding more comments" });
+    }
+
+    const text = String(req.body?.comment || "").trim();
+    const image = req.file ? buildImageUrl(req, req.file.filename) : "";
+    if (!text && !image) {
+      return res.status(400).json({ message: "comment text or image is required" });
+    }
+
+    existing.comments.push({ text, image });
+    existing.comment = text || existing.comment;
+    existing.image = image || existing.image;
+    await existing.save();
+
+    const populated = await existing.populate("user", "id name image");
+    return res.status(201).json(normalizeReviewForResponse(req, populated));
+  } catch (error) {
+    return res.status(500).json({ message: error.message || "Failed to add comment" });
+  }
+});
+
+// PUT /products/:id/reviews/me/comments/:commentId — edit one comment
+router.put("/:id/reviews/me/comments/:commentId", authJwt, uploadSingleImage, async (req, res) => {
+  try {
+    const productId = req.params.id;
+    const commentId = req.params.commentId;
+    if (!mongoose.Types.ObjectId.isValid(productId)) {
+      return res.status(400).json({ message: "Invalid product id" });
+    }
+
+    const existing = await Review.findOne({
+      user: req.user.userId,
+      targetType: "product",
+      targetId: productId,
+    });
+    if (!existing) {
+      return res.status(404).json({ message: "Review not found" });
+    }
+
+    const target = existing.comments.id(commentId);
+    if (!target) {
+      return res.status(404).json({ message: "Comment not found" });
+    }
+
+    if (req.body?.comment !== undefined) {
+      target.text = String(req.body.comment || "").trim();
+      existing.comment = target.text;
+    }
+
+    if (req.file) {
+      target.image = buildImageUrl(req, req.file.filename);
+      existing.image = target.image;
+    } else if (req.body?.removeImage === "true" || req.body?.removeImage === true) {
+      target.image = "";
+      existing.image = "";
+    }
+
+    await existing.save();
+    const populated = await existing.populate("user", "id name image");
+    return res.status(200).json(normalizeReviewForResponse(req, populated));
+  } catch (error) {
+    return res.status(500).json({ message: error.message || "Failed to edit comment" });
+  }
+});
+
+// DELETE /products/:id/reviews/me/comments/:commentId — delete one comment
+router.delete("/:id/reviews/me/comments/:commentId", authJwt, async (req, res) => {
+  try {
+    const productId = req.params.id;
+    const commentId = req.params.commentId;
+    if (!mongoose.Types.ObjectId.isValid(productId)) {
+      return res.status(400).json({ message: "Invalid product id" });
+    }
+
+    const existing = await Review.findOne({
+      user: req.user.userId,
+      targetType: "product",
+      targetId: productId,
+    });
+    if (!existing) {
+      return res.status(404).json({ message: "Review not found" });
+    }
+
+    const target = existing.comments.id(commentId);
+    if (!target) {
+      return res.status(404).json({ message: "Comment not found" });
+    }
+
+    target.deleteOne();
+    await existing.save();
+    const populated = await existing.populate("user", "id name image");
+    return res.status(200).json(normalizeReviewForResponse(req, populated));
+  } catch (error) {
+    return res.status(500).json({ message: error.message || "Failed to delete comment" });
+  }
+});
+
+// DELETE /products/:id/reviews/me — authenticated owner delete
+router.delete("/:id/reviews/me", authJwt, async (req, res) => {
+  try {
+    const productId = req.params.id;
+    if (!mongoose.Types.ObjectId.isValid(productId)) {
+      return res.status(400).json({ message: "Invalid product id" });
+    }
+
+    const existing = await Review.findOneAndDelete({
+      user: req.user.userId,
+      targetType: "product",
+      targetId: productId,
+    });
+
+    if (!existing) {
+      return res.status(404).json({ message: "Your review for this product was not found" });
+    }
+
+    await updateProductReviewAggregate(productId);
+    return res.status(200).json({ success: true });
+  } catch (error) {
+    return res.status(500).json({ message: error.message || "Failed to delete review" });
   }
 });
 

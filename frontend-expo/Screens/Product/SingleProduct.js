@@ -6,13 +6,19 @@ import {
     Text,
     ScrollView,
     TouchableOpacity,
+    TextInput,
+    ActivityIndicator,
+    Platform,
 } from "react-native";
 import { Surface } from "react-native-paper";
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useDispatch } from "react-redux";
+import * as ImagePicker from "expo-image-picker";
+import { jwtDecode } from "jwt-decode";
+import { useDispatch, useSelector } from "react-redux";
 import Toast from "react-native-toast-message";
 import { addToCart } from "../../Redux/Actions/cartActions";
+import { fetchReviews, submitReview, deleteReviewComment } from "../../Redux/Actions/reviewActions";
 import { resolveImageUrl } from "../../assets/common/imageUrl";
 import { isFavoriteItem, toggleFavoriteItem } from "../../assets/common/favorites";
 
@@ -20,6 +26,10 @@ const SingleProduct = ({ route }) => {
     const [item] = useState(route.params?.item || {});
     const [isFavorite, setIsFavorite] = useState(false);
     const dispatch = useDispatch();
+
+    // ── Redux state for reviews ──
+    const { items: reviews, loading: reviewLoading, submitting: reviewSubmitting } = useSelector((state) => state.reviews);
+
     const stock = Number(item.countInStock || 0);
     const isOutOfStock = stock <= 0;
     const categoryName = item.category?.name || "Uncategorized";
@@ -28,6 +38,49 @@ const SingleProduct = ({ route }) => {
     const rating = Number(item.rating || 0).toFixed(1);
     const richDescription = item.richDescription || item.description || "No additional details available.";
     const itemId = String(item.id || item._id || item.name || "");
+    const [reviewRating, setReviewRating] = useState(5);
+    const [reviewComment, setReviewComment] = useState("");
+    const [reviewImageUri, setReviewImageUri] = useState("");
+    const [currentUserId, setCurrentUserId] = useState("");
+    const [openReviewMenuId, setOpenReviewMenuId] = useState("");
+    const [editingCommentRef, setEditingCommentRef] = useState(null);
+
+    const avgRating = reviews.length > 0
+        ? (reviews.reduce((sum, review) => sum + Number(review.rating || 0), 0) / reviews.length).toFixed(1)
+        : rating;
+    const totalReviews = reviews.length > 0 ? reviews.length : reviewCount;
+    const ownReviewExists = reviews.some((review) => String(review?.user?.id || review?.user?._id || "") === currentUserId);
+
+    const buildReviewFormData = async () => {
+        const payload = new FormData();
+        if (!ownReviewExists) {
+            payload.append("rating", String(Number(reviewRating)));
+        }
+        payload.append("comment", String(reviewComment || "").trim());
+        if (reviewImageUri) {
+            if (!reviewImageUri.startsWith("http://") && !reviewImageUri.startsWith("https://")) {
+                const fileName = reviewImageUri.split("/").pop() || `review-${Date.now()}.jpg`;
+                if (Platform.OS === "web") {
+                    const blob = await fetch(reviewImageUri).then((res) => res.blob());
+                    payload.append("image", blob, fileName);
+                } else {
+                    payload.append("image", {
+                        uri: reviewImageUri,
+                        name: fileName,
+                        type: "image/jpeg",
+                    });
+                }
+            }
+        }
+        if (editingCommentRef?.hadImage && !reviewImageUri) {
+            payload.append("removeImage", "true");
+        }
+        return payload;
+    };
+
+    const loadReviews = () => {
+        dispatch(fetchReviews(itemId));
+    };
 
     useEffect(() => {
         let isMounted = true;
@@ -50,6 +103,20 @@ const SingleProduct = ({ route }) => {
             isMounted = false;
         };
     }, [itemId]);
+
+    useEffect(() => {
+        loadReviews();
+    }, [itemId]);
+
+    useEffect(() => {
+        AsyncStorage.getItem("jwt")
+            .then((token) => {
+                if (!token) return;
+                const decoded = jwtDecode(token);
+                setCurrentUserId(String(decoded?.userId || ""));
+            })
+            .catch(() => setCurrentUserId(""));
+    }, []);
 
     const handleAddToCart = () => {
         if (isOutOfStock) {
@@ -83,6 +150,163 @@ const SingleProduct = ({ route }) => {
                 text1: "Could not update favorites",
             });
         }
+    };
+
+    const submitOrUpdateReview = async () => {
+        const normalizedRating = Number(reviewRating);
+
+        if (!Number.isInteger(normalizedRating) || normalizedRating < 1 || normalizedRating > 5) {
+            Toast.show({
+                topOffset: 60,
+                type: "error",
+                text1: "Rating must be from 1 to 5",
+            });
+            return;
+        }
+
+        const token = await AsyncStorage.getItem("jwt");
+        if (!token) {
+            Toast.show({
+                topOffset: 60,
+                type: "error",
+                text1: "Please login to review",
+            });
+            return;
+        }
+
+        try {
+            const formData = await buildReviewFormData();
+            let mode = "create";
+            let commentId = null;
+            if (editingCommentRef?.commentId) {
+                mode = "editComment";
+                commentId = editingCommentRef.commentId;
+            } else if (ownReviewExists) {
+                mode = "addComment";
+            }
+
+            await dispatch(submitReview(itemId, formData, mode, commentId));
+
+            if (mode === "editComment") {
+                Toast.show({ topOffset: 60, type: "success", text1: "Comment updated" });
+            } else if (mode === "addComment") {
+                Toast.show({ topOffset: 60, type: "success", text1: "Comment added" });
+            } else {
+                Toast.show({ topOffset: 60, type: "success", text1: "Review submitted" });
+            }
+
+            setReviewComment("");
+            setReviewRating(5);
+            setReviewImageUri("");
+            setEditingCommentRef(null);
+        } catch (error) {
+            const status = error?.response?.status;
+            if (status === 409 && !ownReviewExists) {
+                Toast.show({
+                    topOffset: 60,
+                    type: "error",
+                    text1: "Rating can only be submitted once",
+                    text2: "You can still add more comments.",
+                });
+            } else if (status === 403) {
+                Toast.show({
+                    topOffset: 60,
+                    type: "error",
+                    text1: "Verified purchase required",
+                    text2: "Only shipped/delivered buyers can review.",
+                });
+            } else {
+                Toast.show({
+                    topOffset: 60,
+                    type: "error",
+                    text1: "Could not submit review",
+                });
+            }
+        }
+    };
+
+    const pickReviewImage = async (mode) => {
+        try {
+            if (mode === "camera") {
+                const permission = await ImagePicker.requestCameraPermissionsAsync();
+                if (!permission.granted) {
+                    Toast.show({ topOffset: 60, type: "error", text1: "Camera permission denied" });
+                    return;
+                }
+                const result = await ImagePicker.launchCameraAsync({
+                    mediaTypes: ["images"],
+                    quality: 0.7,
+                });
+                if (!result.canceled && result.assets?.[0]?.uri) {
+                    setReviewImageUri(result.assets[0].uri);
+                }
+                return;
+            }
+
+            const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+            if (!permission.granted) {
+                Toast.show({ topOffset: 60, type: "error", text1: "Gallery permission denied" });
+                return;
+            }
+            const result = await ImagePicker.launchImageLibraryAsync({
+                mediaTypes: ["images"],
+                allowsEditing: true,
+                quality: 0.7,
+            });
+            if (!result.canceled && result.assets?.[0]?.uri) {
+                setReviewImageUri(result.assets[0].uri);
+            }
+        } catch (_error) {
+            Toast.show({ topOffset: 60, type: "error", text1: "Could not attach image" });
+        }
+    };
+
+    const deleteMyComment = async (commentId) => {
+        const token = await AsyncStorage.getItem("jwt");
+        if (!token) {
+            Toast.show({ topOffset: 60, type: "error", text1: "Please login first" });
+            return;
+        }
+
+        try {
+            if (!ownReviewExists) {
+                Toast.show({ topOffset: 60, type: "error", text1: "You have no review to remove" });
+                return;
+            }
+
+            if (!commentId) {
+                Toast.show({ topOffset: 60, type: "error", text1: "Select a comment from the 3-dot menu first" });
+                return;
+            }
+
+            // Dispatch Redux action — re-fetch is handled inside deleteReviewComment
+            await dispatch(deleteReviewComment(itemId, commentId));
+            setReviewComment("");
+            setReviewImageUri("");
+            setReviewRating(5);
+            setEditingCommentRef(null);
+            setOpenReviewMenuId("");
+            Toast.show({ topOffset: 60, type: "success", text1: "Comment removed" });
+        } catch (error) {
+            const status = error?.response?.status;
+            if (status === 404) {
+                Toast.show({ topOffset: 60, type: "error", text1: "No review found to remove" });
+            } else {
+                Toast.show({ topOffset: 60, type: "error", text1: "Could not remove review" });
+            }
+        }
+    };
+
+    const startEditingComment = (comment, ratingValue) => {
+        setReviewRating(Number(ratingValue || 5));
+        setReviewComment(String(comment?.text || comment?.comment || ""));
+        const image = comment?.image ? resolveImageUrl(comment.image) : "";
+        setReviewImageUri(String(image));
+        setEditingCommentRef({
+            commentId: comment?.id || comment?._id,
+            hadImage: Boolean(image),
+        });
+        setOpenReviewMenuId("");
     };
 
     return (
@@ -137,8 +361,8 @@ const SingleProduct = ({ route }) => {
                         <Text style={styles.currentPrice}>P{price}</Text>
                         <View style={styles.ratingRow}>
                             <Ionicons name="star" size={14} color="#fbbf24" />
-                            <Text style={styles.ratingText}>{rating}</Text>
-                            <Text style={styles.ratingCount}>• {reviewCount} reviews</Text>
+                            <Text style={styles.ratingText}>{avgRating}</Text>
+                            <Text style={styles.ratingCount}>• {totalReviews} reviews</Text>
                         </View>
                     </View>
 
@@ -202,6 +426,138 @@ const SingleProduct = ({ route }) => {
                             <Text style={styles.infoLabel}>Stock</Text>
                             <Text style={styles.infoValue}>{stock}</Text>
                         </View>
+                    </View>
+
+                    <View style={styles.sectionCard}>
+                        <Text style={styles.sectionTitle}>Reviews & Ratings</Text>
+                        <Text style={styles.reviewHint}>Leave a rating from 1 to 5. If you already reviewed, this updates your review.</Text>
+
+                        <View style={styles.starRow}>
+                            {[1, 2, 3, 4, 5].map((star) => (
+                                <TouchableOpacity key={star} onPress={() => setReviewRating(star)}>
+                                    <Ionicons
+                                        name={reviewRating >= star ? "star" : "star-outline"}
+                                        size={22}
+                                        color={reviewRating >= star ? "#fbbf24" : "#64748b"}
+                                    />
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+
+                        <TextInput
+                            style={styles.reviewInput}
+                            multiline
+                            numberOfLines={3}
+                            value={reviewComment}
+                            onChangeText={setReviewComment}
+                            placeholder="Share your experience..."
+                            placeholderTextColor="#64748b"
+                        />
+
+                        <View style={styles.reviewActionRow}>
+                            <TouchableOpacity style={styles.reviewIconButton} onPress={() => pickReviewImage("camera")}>
+                                <Ionicons name="camera-outline" size={18} color="#f8fafc" />
+                                <Text style={styles.reviewIconLabel}>Camera</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={styles.reviewIconButton} onPress={() => pickReviewImage("gallery")}>
+                                <Ionicons name="image-outline" size={18} color="#f8fafc" />
+                                <Text style={styles.reviewIconLabel}>Photo</Text>
+                            </TouchableOpacity>
+                            {reviewImageUri ? (
+                                <TouchableOpacity style={styles.reviewIconButtonMuted} onPress={() => setReviewImageUri("")}>
+                                    <Ionicons name="close-circle-outline" size={18} color="#f8fafc" />
+                                    <Text style={styles.reviewIconLabel}>Remove Photo</Text>
+                                </TouchableOpacity>
+                            ) : null}
+                        </View>
+
+                        {reviewImageUri ? (
+                            <Image source={{ uri: reviewImageUri }} style={styles.reviewPreview} resizeMode="cover" />
+                        ) : null}
+
+                        <TouchableOpacity
+                            style={[styles.reviewButton, reviewSubmitting && styles.reviewButtonDisabled]}
+                            onPress={submitOrUpdateReview}
+                            disabled={reviewSubmitting}
+                            activeOpacity={0.85}
+                        >
+                            {reviewSubmitting ? (
+                                <ActivityIndicator color="#fff" size="small" />
+                            ) : (
+                                <Text style={styles.reviewButtonText}>
+                                    {editingCommentRef ? "Update Comment" : ownReviewExists ? "Add Comment" : "Submit Review"}
+                                </Text>
+                            )}
+                        </TouchableOpacity>
+
+                        {reviewLoading ? (
+                            <View style={styles.reviewLoadingWrap}>
+                                <ActivityIndicator size="small" color="#fb923c" />
+                                <Text style={styles.reviewLoadingText}>Loading reviews...</Text>
+                            </View>
+                        ) : (
+                            <View style={styles.reviewList}>
+                                {reviews.length === 0 ? (
+                                    <Text style={styles.noReviews}>No reviews yet.</Text>
+                                ) : (
+                                    reviews.map((review) => {
+                                        const comments = Array.isArray(review.comments) && review.comments.length > 0
+                                            ? review.comments
+                                            : [{
+                                                id: `legacy-${review.id || review._id}`,
+                                                text: review.comment || "",
+                                                image: review.image || "",
+                                            }];
+
+                                        return (
+                                        <View key={review.id || review._id} style={styles.reviewCard}>
+                                            {comments.map((comment, index) => {
+                                                const menuId = `${review.id || review._id}:${comment.id || comment._id || index}`;
+                                                const mine = String(review?.user?.id || review?.user?._id || "") === currentUserId;
+                                                return (
+                                                    <View key={menuId} style={styles.commentBlock}>
+                                                        <View style={styles.reviewHeader}>
+                                                            <Text style={styles.reviewAuthor}>{review?.user?.name || "Customer"}</Text>
+                                                            <View style={styles.reviewHeaderRight}>
+                                                                <Text style={styles.reviewStars}>{"★".repeat(Number(review.rating || 0))}</Text>
+                                                                {mine ? (
+                                                                    <TouchableOpacity
+                                                                        style={styles.reviewMenuTrigger}
+                                                                        onPress={() => setOpenReviewMenuId(openReviewMenuId === menuId ? "" : menuId)}
+                                                                    >
+                                                                        <Ionicons name="ellipsis-vertical" size={16} color="#f8fafc" />
+                                                                    </TouchableOpacity>
+                                                                ) : null}
+                                                            </View>
+                                                        </View>
+                                                        {openReviewMenuId === menuId ? (
+                                                            <View style={styles.reviewMenuBox}>
+                                                                <TouchableOpacity style={styles.reviewMenuItem} onPress={() => startEditingComment(comment, review.rating)}>
+                                                                    <Ionicons name="create-outline" size={14} color="#f8fafc" />
+                                                                    <Text style={styles.reviewMenuText}>Edit</Text>
+                                                                </TouchableOpacity>
+                                                                <TouchableOpacity
+                                                                    style={styles.reviewMenuItem}
+                                                                    onPress={() => deleteMyComment(comment.id || comment._id)}
+                                                                >
+                                                                    <Ionicons name="trash-outline" size={14} color="#fecaca" />
+                                                                    <Text style={styles.reviewMenuTextDanger}>Remove</Text>
+                                                                </TouchableOpacity>
+                                                            </View>
+                                                        ) : null}
+                                                        <Text style={styles.reviewComment}>{comment.text || "No written feedback"}</Text>
+                                                        {comment.image ? (
+                                                            <Image source={{ uri: resolveImageUrl(comment.image) }} style={styles.reviewPhoto} resizeMode="cover" />
+                                                        ) : null}
+                                                    </View>
+                                                );
+                                            })}
+                                        </View>
+                                        );
+                                    })
+                                )}
+                            </View>
+                        )}
                     </View>
                 </View>
             </ScrollView>
@@ -494,6 +850,180 @@ const styles = StyleSheet.create({
         color: "#f8fafc",
         fontSize: 18,
         fontWeight: "800",
+    },
+    reviewHint: {
+        color: "#94a3b8",
+        fontSize: 12,
+        marginBottom: 10,
+    },
+    starRow: {
+        flexDirection: "row",
+        gap: 10,
+        marginBottom: 10,
+    },
+    reviewInput: {
+        minHeight: 82,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: "rgba(148, 163, 184, 0.2)",
+        backgroundColor: "#0b1220",
+        color: "#f8fafc",
+        paddingHorizontal: 10,
+        paddingVertical: 10,
+        textAlignVertical: "top",
+        marginBottom: 10,
+    },
+    reviewActionRow: {
+        flexDirection: "row",
+        flexWrap: "wrap",
+        gap: 8,
+        marginBottom: 10,
+    },
+    reviewIconButton: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 6,
+        backgroundColor: "#1e293b",
+        borderWidth: 1,
+        borderColor: "rgba(148, 163, 184, 0.2)",
+        borderRadius: 10,
+        paddingHorizontal: 10,
+        paddingVertical: 8,
+    },
+    reviewIconButtonMuted: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 6,
+        backgroundColor: "#475569",
+        borderRadius: 10,
+        paddingHorizontal: 10,
+        paddingVertical: 8,
+    },
+    reviewIconLabel: {
+        color: "#f8fafc",
+        fontSize: 12,
+        fontWeight: "700",
+    },
+    reviewPreview: {
+        width: "100%",
+        height: 130,
+        borderRadius: 10,
+        marginBottom: 10,
+        backgroundColor: "#111827",
+    },
+    reviewButton: {
+        backgroundColor: "#ea580c",
+        borderRadius: 12,
+        alignItems: "center",
+        justifyContent: "center",
+        paddingVertical: 11,
+        marginBottom: 12,
+    },
+    reviewButtonDisabled: {
+        opacity: 0.7,
+    },
+    reviewButtonText: {
+        color: "#fff",
+        fontWeight: "800",
+    },
+    reviewLoadingWrap: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 8,
+    },
+    reviewLoadingText: {
+        color: "#94a3b8",
+        fontSize: 12,
+    },
+    reviewList: {
+        gap: 8,
+    },
+    noReviews: {
+        color: "#94a3b8",
+        fontSize: 13,
+    },
+    reviewCard: {
+        borderWidth: 1,
+        borderColor: "rgba(148, 163, 184, 0.18)",
+        borderRadius: 12,
+        backgroundColor: "#0b1220",
+        padding: 10,
+        gap: 6,
+    },
+    commentBlock: {
+        borderTopWidth: 1,
+        borderTopColor: "rgba(148, 163, 184, 0.16)",
+        paddingTop: 8,
+        marginTop: 6,
+    },
+    reviewHeader: {
+        flexDirection: "row",
+        justifyContent: "space-between",
+        alignItems: "center",
+        gap: 8,
+    },
+    reviewHeaderRight: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 8,
+    },
+    reviewAuthor: {
+        color: "#f8fafc",
+        fontSize: 13,
+        fontWeight: "700",
+    },
+    reviewMenuTrigger: {
+        width: 24,
+        height: 24,
+        borderRadius: 12,
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: "#1e293b",
+    },
+    reviewMenuBox: {
+        marginTop: 6,
+        marginBottom: 6,
+        borderWidth: 1,
+        borderColor: "rgba(148, 163, 184, 0.2)",
+        backgroundColor: "#0f172a",
+        borderRadius: 8,
+        padding: 6,
+        gap: 4,
+        alignSelf: "flex-end",
+    },
+    reviewMenuItem: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 6,
+        paddingHorizontal: 8,
+        paddingVertical: 6,
+    },
+    reviewMenuText: {
+        color: "#f8fafc",
+        fontSize: 12,
+        fontWeight: "700",
+    },
+    reviewMenuTextDanger: {
+        color: "#fecaca",
+        fontSize: 12,
+        fontWeight: "700",
+    },
+    reviewStars: {
+        color: "#fbbf24",
+        fontSize: 12,
+        fontWeight: "700",
+    },
+    reviewComment: {
+        color: "#cbd5e1",
+        fontSize: 13,
+        lineHeight: 18,
+    },
+    reviewPhoto: {
+        width: "100%",
+        height: 120,
+        borderRadius: 8,
+        marginTop: 8,
+        backgroundColor: "#111827",
     },
     bottomBar: {
         position: "absolute",
