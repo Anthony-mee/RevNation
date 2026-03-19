@@ -5,9 +5,18 @@ import baseURL from "../../assets/common/baseurl";
 import { setAuthToken, getAuthToken, removeAuthToken } from "../../assets/common/tokenStorage";
 
 export const SET_CURRENT_USER = "SET_CURRENT_USER";
+const REQUEST_TIMEOUT_MS = 12000;
+
+const fetchWithTimeout = (url, options = {}, timeoutMs = REQUEST_TIMEOUT_MS) => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+    return fetch(url, { ...options, signal: controller.signal })
+        .finally(() => clearTimeout(timeoutId));
+};
 
 export const loginUser = (user, dispatch) => {
-    return fetch(`${baseURL}users/login`, {
+    return fetchWithTimeout(`${baseURL}users/login`, {
         method: "POST",
         body: JSON.stringify(user),
         headers: {
@@ -31,7 +40,7 @@ export const loginUser = (user, dispatch) => {
         })
         .catch((err) => {
             const isInvalidCredentials = /invalid credentials/i.test(String(err?.message));
-            const isNetworkError = /network request failed/i.test(String(err?.message));
+            const isNetworkError = /network request failed|aborted|timed out|timeout/i.test(String(err?.message));
             Toast.show({
                 topOffset: 60,
                 type: "error",
@@ -43,7 +52,7 @@ export const loginUser = (user, dispatch) => {
                 text2: isInvalidCredentials
                     ? "Please try again"
                     : isNetworkError
-                        ? `Check backend URL in baseurl.js (${baseURL}) and use same WiFi.`
+                        ? `Server unreachable. Check baseurl.js (${baseURL}), same WiFi, and HTTP/HTTPS config.`
                         : String(err?.message || "Please try again"),
             });
             console.log(err);

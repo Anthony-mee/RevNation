@@ -142,9 +142,20 @@ function AppInner() {
     }
   }, [context?.stateUser?.isAuthenticated]);
 
+  useEffect(() => {
+    const subscription = Notifications.addNotificationResponseReceivedListener((response) => {
+      const orderId = response?.notification?.request?.content?.data?.orderId;
+      if (orderId && context?.navigation) {
+        // Navigate to order details screen
+        context.navigation.navigate('My Orders', { screen: 'OrderDetails', params: { orderId } });
+      }
+    });
+    return () => subscription.remove();
+  }, [context?.navigation]);
+
   return (
     <Provider store={store}>
-      <NavigationContainer>
+      <NavigationContainer ref={ref => { if (context) context.navigation = ref; }}>
         <PaperProvider>
           <DrawerNavigator />
         </PaperProvider>

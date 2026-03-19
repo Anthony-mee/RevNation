@@ -46,20 +46,32 @@ const NotificationCenter = () => {
         setNotifications([]);
     };
 
-    const renderItem = ({ item }) => (
-        <View style={styles.card}>
-            <View style={styles.iconContainer}>
-                <Ionicons name="notifications" size={24} color="#ea580c" />
-            </View>
-            <View style={styles.textContainer}>
-                <Text style={styles.title}>{item.title}</Text>
-                <Text style={styles.body}>{item.body}</Text>
-                <Text style={styles.date}>
-                    {item.date.toLocaleDateString()} {item.date.toLocaleTimeString()}
-                </Text>
-            </View>
-        </View>
-    );
+    const navigation = useNavigation();
+    const renderItem = ({ item }) => {
+        const isPromotion = item.data && item.data.type === "promotion" && item.data.productId;
+        return (
+            <TouchableOpacity
+                style={styles.card}
+                disabled={!isPromotion}
+                onPress={() => {
+                    if (isPromotion) {
+                        navigation.navigate("ProductDetails", { productId: item.data.productId });
+                    }
+                }}
+            >
+                <View style={styles.iconContainer}>
+                    <Ionicons name="notifications" size={24} color="#ea580c" />
+                </View>
+                <View style={styles.textContainer}>
+                    <Text style={styles.title}>{item.title}</Text>
+                    <Text style={styles.body}>{item.body}</Text>
+                    <Text style={styles.date}>
+                        {item.date.toLocaleDateString()} {item.date.toLocaleTimeString()}
+                    </Text>
+                </View>
+            </TouchableOpacity>
+        );
+    };
 
     return (
         <View style={styles.container}>

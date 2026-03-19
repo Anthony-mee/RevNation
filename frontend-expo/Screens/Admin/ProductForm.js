@@ -183,8 +183,17 @@ const ProductForm = (props) => {
             });
             return;
         }
-        if (!name || !brand || !price || !description || !category || !countInStock) {
+        const priceVal = price === undefined || price === null || String(price).trim() === "" ? NaN : Number(price);
+        const stockVal = countInStock === undefined || countInStock === null || String(countInStock).trim() === "" ? NaN : Number(countInStock);
+
+        if (!name || !brand || !description || !category || Number.isNaN(priceVal) || Number.isNaN(stockVal)) {
             setError("Please fill in the form correctly");
+            Toast.show({
+                topOffset: 60,
+                type: "error",
+                text1: "Please fill in all required fields",
+                text2: "Price and stock may be 0 but must be numeric",
+            });
             return;
         }
         setIsSubmitting(true);
@@ -230,9 +239,15 @@ const ProductForm = (props) => {
             }
         }
 
+        // Log all FormData keys/values for debugging
+        if (formData && formData._parts) {
+            console.log('[ProductForm] FormData keys:', formData._parts.map(([k, v]) => k));
+        }
+        // Only set Content-Type for web; let axios set it for native
         const config = {
             headers: {
                 Authorization: "Bearer " + token,
+                ...(Platform.OS === 'web' ? { 'Content-Type': 'multipart/form-data' } : {}),
             },
         };
         const productId = item?.id ?? item?._id;
@@ -249,13 +264,28 @@ const ProductForm = (props) => {
                     : err?.response?.data?.message || err?.message || "Something went wrong";
             Toast.show({ topOffset: 60, type: "error", text1: msg });
         };
+        const url = productId ? `${baseURL}products/${productId}` : `${baseURL}products`;
+        console.log('[ProductForm] Submitting to:', url);
+        console.log('[ProductForm] Config:', config);
+        console.log('[ProductForm] FormData:', formData);
         const request = productId
-            ? axios.put(`${baseURL}products/${productId}`, formData, config)
-            : axios.post(`${baseURL}products`, formData, config);
+            ? axios.put(url, formData, config)
+            : axios.post(url, formData, config);
 
         request
-            .then((res) => (res.status === 200 || res.status === 201) && thenNav())
-            .catch(catchErr)
+            .then((res) => {
+                console.log('[ProductForm] Success:', res?.status, res?.data);
+                (res.status === 200 || res.status === 201) && thenNav();
+            })
+            .catch((err) => {
+                console.log('[ProductForm] Error details:', {
+                    url,
+                    config,
+                    error: err?.toJSON ? err.toJSON() : err,
+                    response: err?.response,
+                });
+                catchErr(err);
+            })
             .finally(() => setIsSubmitting(false));
     };
 

@@ -18,6 +18,7 @@
     },
     "android": {
       "package": "com.peakplay.itcp239",
+      "usesCleartextTraffic": true,
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",

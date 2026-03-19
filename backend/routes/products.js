@@ -24,6 +24,37 @@ const router = express.Router();
 const uploadPath = getUploadAbsolutePath();
 ensureUploadDirExists();
 
+// POST /products/promote — admin only, send promotion/discount notification
+router.post("/promote", authJwt, async (req, res) => {
+  try {
+    if (!req.user?.isAdmin) {
+      return res.status(403).json({ message: "Only admins can send promotions" });
+    }
+    const { productId, title, body, discount } = req.body;
+    if (!productId || !title || !body) {
+      return res.status(400).json({ message: "productId, title, and body are required" });
+    }
+    const product = await Product.findById(productId);
+    if (!product) {
+      return res.status(404).json({ message: "Product not found" });
+    }
+    const users = await User.find({}, "pushToken pushTokenType pushTokens").lean();
+    const tokens = users.flatMap((user) => User.collectActivePushTargets(user));
+    await sendToTokens(tokens, {
+      title,
+      body,
+      data: {
+        productId,
+        discount: discount || null,
+        type: "promotion",
+      },
+    });
+    return res.status(200).json({ success: true, sent: tokens.length });
+  } catch (error) {
+    return res.status(500).json({ message: error.message || "Failed to send promotion notification" });
+  }
+});
+
 const storage = multer.diskStorage({
   destination: (_req, _file, cb) => cb(null, uploadPath),
   filename: (_req, file, cb) => {
@@ -503,8 +534,12 @@ router.post("/", authJwt, uploadSingleImage, async (req, res) => {
     if (productType === "shop" && !req.user?.isAdmin) {
       return res.status(403).json({ message: "Only admins can add shop products" });
     }
-    if (!name || !brand || !price || !category || countInStock === undefined) {
-      return res.status(400).json({ message: "name, brand, price, category and countInStock are required" });
+
+    const priceVal = price === undefined || price === null || price === "" ? NaN : Number(price);
+    const stockVal = countInStock === undefined || countInStock === null || countInStock === "" ? NaN : Number(countInStock);
+
+    if (!name || !brand || Number.isNaN(priceVal) || !category || Number.isNaN(stockVal)) {
+      return res.status(400).json({ message: "name, brand, price, category and countInStock are required and must be numeric" });
     }
 
     const categoryDoc = await resolveValidCategory(category);

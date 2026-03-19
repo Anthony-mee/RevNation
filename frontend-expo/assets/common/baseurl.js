@@ -1,4 +1,5 @@
 import { Platform } from "react-native";
+import Constants from "expo-constants";
 
 /**
  * Backend API base URL. The app sends all API requests (login, products, orders, etc.) here.
@@ -12,9 +13,41 @@ import { Platform } from "react-native";
  * For web/same machine: use 'http://localhost:4000'
  * When backend is deployed to cloud: set BACKEND_HOST to that URL (e.g. https://your-api.railway.app)
  */
-const LAN_BACKEND_HOST = "http://112.207.211.94:4000";
+// If you are testing on a phone or external LAN, set this to your machine's IP:
+// Note: include the port your backend is running on (default 4000).
+// Do not use a public NAT IP (e.g. 119.x.x.x) unless your router is configured for port forwarding.
+function normalizeHost(rawHost) {
+  if (!rawHost) return "";
+  const trimmed = String(rawHost).trim().replace(/\/+$/, "");
+  if (!trimmed) return "";
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  return `http://${trimmed}`;
+}
+
+function resolveExpoLanBackendHost() {
+  const hostUri =
+    Constants?.expoConfig?.hostUri
+    || Constants?.manifest2?.extra?.expoClient?.hostUri
+    || Constants?.manifest?.debuggerHost
+    || "";
+
+  const hostCandidate = String(hostUri).trim().split(":")[0];
+  const isIPv4 = /^\d{1,3}(?:\.\d{1,3}){3}$/.test(hostCandidate);
+  if (!isIPv4) return "";
+
+  return `http://${hostCandidate}:4000`;
+}
+
+const envHost = normalizeHost(process.env.EXPO_PUBLIC_BACKEND_HOST || process.env.BACKEND_HOST || "");
+const EXPO_LAN_BACKEND_HOST = resolveExpoLanBackendHost();
+const EMULATOR_HOST = Platform.OS === "android" ? "http://10.0.2.2:4000" : "http://localhost:4000";
 const LOCAL_BACKEND_HOST = "http://localhost:4000";
-const BACKEND_HOST = Platform.OS === "web" ? LOCAL_BACKEND_HOST : LAN_BACKEND_HOST;
+
+const BACKEND_HOST =
+  Platform.OS === "web"
+    ? LOCAL_BACKEND_HOST
+    : envHost || EXPO_LAN_BACKEND_HOST || EMULATOR_HOST;
+
 const baseURL = `${BACKEND_HOST}/api/v1/`;
 
 export default baseURL;
