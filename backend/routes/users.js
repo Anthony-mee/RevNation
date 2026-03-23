@@ -858,80 +858,14 @@ router.post("/notifications/details", async (req, res) => {
   }
 });
 
-// POST /users/push-token — save/update push tokens with stale token management
-router.post("/push-token", async (req, res) => {
+// GET /users — get all users
+router.get("/", async (req, res) => {
   try {
-    const { token, type } = req.body;
-    const authHeader = req.headers.authorization;
-    
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({ message: "Authorization token required" });
-    }
-
-    const jwt = authHeader.substring(7); // Remove 'Bearer ' prefix
-    const decoded = jwt.decode(jwt);
-    
-    if (!decoded || !decoded.userId) {
-      return res.status(401).json({ message: "Invalid token" });
-    }
-
-    // Get user
-    const User = require("../models/User");
-    const user = await User.findById(decoded.userId);
-    
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
-    }
-
-    // Clean up stale tokens (remove tokens older than 30 days)
-    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-    const validTokens = (user.pushTokens || []).filter(tokenEntry => {
-      const tokenAge = new Date(tokenEntry.lastSeenAt || tokenEntry.createdAt);
-      return tokenAge > thirtyDaysAgo && tokenEntry.invalidatedAt;
-    });
-
-    // Remove stale/invalidated tokens
-    user.pushTokens = user.pushTokens.filter(tokenEntry => 
-      !validTokens.includes(tokenEntry)
-    );
-
-    // Check if token already exists
-    const existingToken = user.pushTokens.find(tokenEntry => 
-      tokenEntry.token === token && 
-      !tokenEntry.invalidatedAt
-    );
-
-    if (existingToken) {
-      // Update last seen timestamp
-      existingToken.lastSeenAt = new Date();
-      console.log(`[POST /push-token] Updated existing token for user ${decoded.userId}`);
-    } else {
-      // Add new token
-      user.pushTokens.push({
-        token: token,
-        type: type || 'expo',
-        createdAt: new Date(),
-        lastSeenAt: new Date(),
-        invalidatedAt: null
-      });
-      console.log(`[POST /push-token] Added new token for user ${decoded.userId}`);
-    }
-
-    // Save updated user
-    await user.save();
-
-    console.log(`[POST /push-token] User ${decoded.userId} now has ${user.pushTokens.length} active tokens`);
-
-    return res.status(200).json({
-      success: true,
-      message: "Push token saved successfully",
-      activeTokens: user.pushTokens.length,
-      staleTokensRemoved: validTokens.length
-    });
-
+    const users = await User.find();
+    return res.status(200).json(users);
   } catch (error) {
-    console.error('[POST /push-token] Error:', error.message);
-    return res.status(500).json({ message: "Failed to save push token" });
+    console.error('[GET /users] Error:', error.message);
+    return res.status(500).json({ message: "Failed to get users" });
   }
 });
 
