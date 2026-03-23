@@ -1,6 +1,5 @@
 const express = require("express");
 const path = require("path");
-const fs = require("fs");
 const multer = require("multer");
 const mongoose = require("mongoose");
 const authJwt = require("../middleware/authJwt");
@@ -11,18 +10,13 @@ const Order = require("../models/Order");
 const StockAlert = require("../models/StockAlert");
 const User = require("../models/User");
 const { sendToTokens } = require("../services/notifications");
+const { uploadFile } = require("../services/cloudinary");
 const config = require("../config");
 const {
-  getUploadAbsolutePath,
-  ensureUploadDirExists,
-  buildImageUrl,
   normalizeImageUrl,
 } = require("../utils/uploads");
 
 const router = express.Router();
-
-const uploadPath = getUploadAbsolutePath();
-ensureUploadDirExists();
 
 // POST /products/promote — admin only, send promotion/discount notification
 router.post("/promote", authJwt, async (req, res) => {
@@ -55,17 +49,8 @@ router.post("/promote", authJwt, async (req, res) => {
   }
 });
 
-const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, uploadPath),
-  filename: (_req, file, cb) => {
-    const safeBase = path
-      .parse(file.originalname)
-      .name.replace(/[^a-zA-Z0-9-_]/g, "_")
-      .slice(0, 50);
-    const ext = path.extname(file.originalname) || ".jpg";
-    cb(null, `${Date.now()}-${safeBase}${ext}`);
-  },
-});
+// Use memory storage for Cloudinary uploads
+const storage = multer.memoryStorage();
 
 const upload = multer({
   storage,
@@ -310,9 +295,9 @@ router.post("/:id/reviews", authJwt, uploadSingleImage, async (req, res) => {
       targetId: productId,
       rating,
       comment: String(req.body?.comment || "").trim(),
-      image: req.file ? buildImageUrl(req, req.file.filename) : "",
+      image: req.file ? await uploadFile(req.file, "reviews") : "",
       comments: (String(req.body?.comment || "").trim() || req.file)
-        ? [{ text: String(req.body?.comment || "").trim(), image: req.file ? buildImageUrl(req, req.file.filename) : "" }]
+        ? [{ text: String(req.body?.comment || "").trim(), image: req.file ? await uploadFile(req.file, "reviews") : "" }]
         : [],
     });
 
@@ -361,7 +346,7 @@ router.put("/:id/reviews/me", authJwt, uploadSingleImage, async (req, res) => {
     }
 
     if (req.file) {
-      existing.image = buildImageUrl(req, req.file.filename);
+      existing.image = await uploadFile(req.file, "reviews");
     } else if (req.body?.removeImage === "true" || req.body?.removeImage === true) {
       existing.image = "";
     }
@@ -394,7 +379,7 @@ router.post("/:id/reviews/me/comments", authJwt, uploadSingleImage, async (req, 
     }
 
     const text = String(req.body?.comment || "").trim();
-    const image = req.file ? buildImageUrl(req, req.file.filename) : "";
+    const image = req.file ? await uploadFile(req.file, "reviews") : "";
     if (!text && !image) {
       return res.status(400).json({ message: "comment text or image is required" });
     }
@@ -440,7 +425,7 @@ router.put("/:id/reviews/me/comments/:commentId", authJwt, uploadSingleImage, as
     }
 
     if (req.file) {
-      target.image = buildImageUrl(req, req.file.filename);
+      target.image = await uploadFile(req.file, "reviews");
       existing.image = target.image;
     } else if (req.body?.removeImage === "true" || req.body?.removeImage === true) {
       target.image = "";
@@ -515,7 +500,9 @@ router.delete("/:id/reviews/me", authJwt, async (req, res) => {
 // GET /products/:id — public
 router.get("/:id", async (req, res) => {
   try {
-    const product = await Product.findById(req.params.id).populate("category", "id name color");
+    const product = await Product.findById(req.params.id)
+      .populate("category", "id name color")
+      .populate("createdBy", "id name email image");
     if (!product) return res.status(404).json({ message: "Product not found" });
     const json = product.toJSON();
     json.image = normalizeImageUrl(req, json.image);
@@ -547,7 +534,7 @@ router.post("/", authJwt, uploadSingleImage, async (req, res) => {
       return res.status(400).json({ message: "Create a valid category first before adding a product" });
     }
 
-    const image = req.file ? buildImageUrl(req, req.file.filename) : "";
+    const image = req.file ? await uploadFile(req.file, "products") : "";
     const product = await Product.create({
       productType,
       name, brand, price: Number(price), description, richDescription,
@@ -602,7 +589,7 @@ router.put("/:id", authJwt, uploadSingleImage, async (req, res) => {
       return res.status(400).json({ message: "Create a valid category first before saving this product" });
     }
 
-    const image = req.file ? buildImageUrl(req, req.file.filename) : existing.image;
+    const image = req.file ? await uploadFile(req.file, "products") : existing.image;
 
     const updated = await Product.findByIdAndUpdate(
       req.params.id,

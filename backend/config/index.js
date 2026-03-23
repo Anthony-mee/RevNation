@@ -2,7 +2,7 @@ const requiredKeys = ["CONNECTION_STRING", "JWT_SECRET"];
 
 const config = {
   nodeEnv: process.env.NODE_ENV || "development",
-  port: Number(process.env.PORT || 4000),
+  port: Number(process.env.PORT || 4002),
   apiPrefix: process.env.API_PREFIX || "/api/v1",
   connectionString: process.env.CONNECTION_STRING || "",
   dbName: process.env.DB_NAME || "ITCP_database",
@@ -12,7 +12,7 @@ const config = {
   uploadDir: process.env.UPLOAD_DIR || "uploads",
   maxFileSizeMb: Number(process.env.MAX_FILE_SIZE_MB || 5),
   fcmServiceAccountPath: process.env.FCM_SERVICE_ACCOUNT_PATH || "",
-  appBaseUrl: process.env.APP_BASE_URL || `http://localhost:${process.env.PORT || 4000}`,
+  appBaseUrl: process.env.APP_BASE_URL || `http://localhost:${process.env.PORT || 4002}`,
   emailFrom: process.env.EMAIL_FROM || "noreply@revnation.local",
   mailtrapHost: process.env.MAILTRAP_HOST || "",
   mailtrapPort: Number(process.env.MAILTRAP_PORT || 2525),
@@ -21,6 +21,11 @@ const config = {
   mailtrapApiToken: process.env.MAILTRAP_API_TOKEN || "",
   emailVerifyTtlHours: Number(process.env.EMAIL_VERIFY_TTL_HOURS || 24),
   requireEmailVerification: String(process.env.REQUIRE_EMAIL_VERIFICATION || "true").toLowerCase() === "true",
+  googleClientSecret: process.env.GOOGLE_CLIENT_SECRET || "",
+  cloudinaryCloudName: process.env.CLOUDINARY_CLOUD_NAME || "",
+  cloudinaryApiKey: process.env.CLOUDINARY_API_KEY || "",
+  cloudinaryApiSecret: process.env.CLOUDINARY_API_SECRET || "",
+  cloudinaryFolder: process.env.CLOUDINARY_FOLDER || "revnation",
 };
 
 const missing = requiredKeys.filter((key) => !process.env[key]);

@@ -1,6 +1,5 @@
 const express = require("express");
 const path = require("path");
-const fs = require("fs");
 const crypto = require("crypto");
 const https = require("https");
 const bcrypt = require("bcryptjs");
@@ -11,29 +10,19 @@ const config = require("../config");
 const authJwt = require("../middleware/authJwt");
 const User = require("../models/User");
 const { sendVerificationEmail } = require("../services/emailService");
+const { verifyFirebaseToken } = require("../config/firebase");
+const { uploadFile, uploadBuffer } = require("../services/cloudinary");
 const {
-  getUploadAbsolutePath,
-  ensureUploadDirExists,
-  buildImageUrl,
   normalizeImageUrl,
 } = require("../utils/uploads");
 
 const router = express.Router();
 
-const uploadPath = getUploadAbsolutePath();
-ensureUploadDirExists();
+// Google OAuth Client IDs
+const WEB_CLIENT_ID = "149350867139-r5q67endg3ip9k024imq8oj07gf2700e.apps.googleusercontent.com";
 
-const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, uploadPath),
-  filename: (_req, file, cb) => {
-    const safeBase = path
-      .parse(file.originalname)
-      .name.replace(/[^a-zA-Z0-9-_]/g, "_")
-      .slice(0, 50);
-    const ext = path.extname(file.originalname) || ".jpg";
-    cb(null, `${Date.now()}-${safeBase}${ext}`);
-  },
-});
+// Use memory storage for Cloudinary uploads
+const storage = multer.memoryStorage();
 
 const upload = multer({
   storage,
@@ -129,7 +118,7 @@ router.post("/register", upload.single("image"), async (req, res) => {
     }
 
     const passwordHash = await bcrypt.hash(String(password), 10);
-    const image = req.file ? buildImageUrl(req, req.file.filename) : "";
+    const image = req.file ? await uploadFile(req.file, "users") : "";
     const verification = config.requireEmailVerification ? createEmailVerificationToken() : null;
 
     const user = await User.create({
@@ -344,6 +333,47 @@ router.post("/wallet/topup", authJwt, walletTopupHandler);
 // POST /users/wallet/mock-topup — backward-compatible mock endpoint
 router.post("/wallet/mock-topup", authJwt, walletTopupHandler);
 
+// GET /users/search - search for users (excludes current user and banned/disabled users)
+router.get("/search", authJwt, async (req, res) => {
+  try {
+    const { query } = req.query;
+    const currentUserId = req.user.userId;
+
+    if (!query || query.length < 2) {
+      return res.status(400).json({ message: "Query must be at least 2 characters" });
+    }
+
+    const searchRegex = new RegExp(query, "i");
+
+    const users = await User.find({
+      $and: [
+        { _id: { $ne: currentUserId } },
+        { $or: [{ isBanned: false }, { isBanned: { $exists: false } }] },
+        { $or: [{ isDisabled: false }, { isDisabled: { $exists: false } }] },
+        {
+          $or: [
+            { name: searchRegex },
+            { email: searchRegex },
+          ],
+        },
+      ],
+    })
+      .select("id name email image isAdmin")
+      .limit(20);
+
+    const usersWithNormalizedImage = users.map((user) => {
+      const userJson = user.toJSON();
+      userJson.image = normalizeImageUrl(req, userJson.image);
+      return userJson;
+    });
+
+    return res.status(200).json({ users: usersWithNormalizedImage });
+  } catch (error) {
+    console.error("[GET /users/search] Error:", error.message);
+    return res.status(500).json({ message: "Failed to search users" });
+  }
+});
+
 router.get("/:id", authJwt, async (req, res) => {
   try {
     const { id } = req.params;
@@ -456,8 +486,10 @@ router.post("/profile/photo", authJwt, upload.single("image"), async (req, res) 
       path: req.file.path,
     });
 
-    const imageUrl = buildImageUrl(req, req.file.filename);
-    console.log("[POST /profile/photo] Image URL built:", imageUrl);
+    console.log("[POST /profile/photo] Uploading to Cloudinary...");
+
+    const imageUrl = await uploadFile(req.file, "users");
+    console.log("[POST /profile/photo] Cloudinary URL:", imageUrl);
 
     const user = await User.findByIdAndUpdate(
       req.user.userId,
@@ -503,20 +535,13 @@ router.post("/profile/photo-base64", authJwt, async (req, res) => {
       return res.status(400).json({ message: "No image data provided" });
     }
 
-    // Convert base64 to buffer
+    // Convert base64 to buffer and upload to Cloudinary
     const imageBuffer = Buffer.from(imageBase64, "base64");
     
-    // Create filename
-    const safeFileName = `${Date.now()}-${(fileName || "photo.jpg").replace(/[^a-zA-Z0-9.]/g, "_")}`;
-    const filePath = path.join(uploadPath, safeFileName);
-    
-    // Write file to disk
-    fs.writeFileSync(filePath, imageBuffer);
-    
-    console.log("[POST /profile/photo-base64] File saved:", safeFileName);
+    console.log("[POST /profile/photo-base64] Uploading to Cloudinary...");
 
-    const imageUrl = buildImageUrl(req, safeFileName);
-    console.log("[POST /profile/photo-base64] Image URL built:", imageUrl);
+    const imageUrl = await uploadBuffer(imageBuffer, `${config.cloudinaryFolder}/users`);
+    console.log("[POST /profile/photo-base64] Cloudinary URL:", imageUrl);
 
     const user = await User.findByIdAndUpdate(
       req.user.userId,
@@ -602,7 +627,354 @@ router.post("/push-token", authJwt, async (req, res) => {
   }
 });
 
-// POST /users/login/google — verify Google access token and issue app JWT
+// POST /users/forgot-password — send password reset email
+router.post("/forgot-password", async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({ message: "Email is required" });
+    }
+
+    if (!email.includes("@")) {
+      return res.status(400).json({ message: "Valid email is required" });
+    }
+
+    // In a real implementation, you would:
+    // 1. Generate a reset token
+    // 2. Save it to database with expiry
+    // 3. Send reset email with token
+    // For now, we'll just return success
+    
+    console.log(`[POST /forgot-password] Password reset requested for: ${email}`);
+    
+    // TODO: Implement actual email sending with reset token
+    // This would involve:
+    // - Generating a unique reset token
+    // - Saving it to user record in database
+    // - Sending email with reset link containing token
+    // - Setting token expiry (e.g., 1 hour)
+    
+    return res.status(200).json({ 
+      message: "Password reset email sent successfully",
+      // For development only, remove in production
+      note: "Email sending not implemented yet. Add email service to complete."
+    });
+
+  } catch (error) {
+    console.error('[POST /forgot-password] Error:', error.message);
+    return res.status(500).json({ message: "Failed to send reset email" });
+  }
+});
+
+// GET /users/notifications/test — test notification status and user tokens
+router.get("/notifications/test", async (req, res) => {
+  try {
+    const { userId } = req.query;
+
+    if (!userId) {
+      return res.status(400).json({ 
+        message: "userId query parameter is required",
+        example: "/users/notifications/test?userId=USER_ID_HERE"
+      });
+    }
+
+    const User = require("../models/User");
+    const user = await User.findById(userId);
+    
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    const pushTokens = user.pushTokens || [];
+    const activeTokens = pushTokens.filter(token => !token.invalidatedAt);
+    const staleTokens = pushTokens.filter(token => token.invalidatedAt);
+
+    return res.status(200).json({
+      userId: userId,
+      userName: user.name,
+      email: user.email,
+      pushTokenStatus: {
+        totalTokens: pushTokens.length,
+        activeTokens: activeTokens.length,
+        staleTokens: staleTokens.length,
+        tokens: pushTokens.map(token => ({
+          type: token.type,
+          lastSeenAt: token.lastSeenAt,
+          createdAt: token.createdAt,
+          isInvalidated: !!token.invalidatedAt,
+          invalidReason: token.invalidReason || null,
+          tokenPreview: token.token.substring(0, 20) + '...'
+        }))
+      },
+      notificationEndpoints: {
+        quiz: `${req.protocol}://${req.get('host')}/users/notifications/quiz`,
+        product: `${req.protocol}://${req.get('host')}/users/notifications/details`,
+        examplePayload: {
+          quiz: {
+            userId: userId,
+            title: "Quiz Test",
+            message: "Test quiz notification",
+            discountCode: "TEST20"
+          },
+          product: {
+            userId: userId,
+            title: "Product Test", 
+            message: "Test product notification",
+            productId: "prod_test",
+            discountAmount: "15%"
+          }
+        }
+      },
+      testInstructions: {
+        backendTest: "Run: node test-push-notifications.js",
+        frontendTest: "Check device for push notifications",
+        logs: "Monitor backend console for push notification logs"
+      }
+    });
+
+  } catch (error) {
+    console.error('[GET /notifications/test] Error:', error.message);
+    return res.status(500).json({ message: "Failed to check notification status" });
+  }
+});
+
+// POST /users/notifications/quiz — send quiz promotion notifications
+router.post("/notifications/quiz", async (req, res) => {
+  try {
+    const { userId, title, message, discountCode } = req.body;
+
+    if (!userId || !title || !message) {
+      return res.status(400).json({ message: "userId, title, and message are required" });
+    }
+
+    // Get user's push tokens
+    const User = require("../models/User");
+    const user = await User.findById(userId);
+    
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    const pushTokens = user.pushTokens || [];
+    
+    if (pushTokens.length === 0) {
+      return res.status(200).json({ 
+        message: "No push tokens found for this user",
+        notificationSent: false
+      });
+    }
+
+    // Create notification payload
+    const notification = {
+      to: pushTokens.map(token => token.token),
+      sound: 'default',
+      title: title || 'Quiz Promotion!',
+      body: message || 'New quiz available with special discount!',
+      data: {
+        type: 'quiz_promotion',
+        discountCode: discountCode || '',
+        action: 'view_quiz',
+        userId: userId
+      },
+      priority: 'high'
+    };
+
+    console.log(`[POST /notifications/quiz] Sending quiz notification to user ${userId}`);
+
+    // In a real implementation, you would send via FCM/Expo push service
+    // For now, we'll return success
+    // TODO: Implement actual push notification sending via FCM/Expo
+
+    return res.status(200).json({ 
+      message: "Quiz notification sent successfully",
+      notificationSent: true,
+      tokensUsed: pushTokens.length,
+      note: "Push notification service not implemented yet. Add FCM/Expo integration."
+    });
+
+  } catch (error) {
+    console.error('[POST /notifications/quiz] Error:', error.message);
+    return res.status(500).json({ message: "Failed to send notification" });
+  }
+});
+
+// POST /users/notifications/details — send promotion detail notifications
+router.post("/notifications/details", async (req, res) => {
+  try {
+    const { userId, title, message, productId, discountAmount } = req.body;
+
+    if (!userId || !title || !message) {
+      return res.status(400).json({ message: "userId, title, and message are required" });
+    }
+
+    // Get user's push tokens
+    const User = require("../models/User");
+    const user = await User.findById(userId);
+    
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    const pushTokens = user.pushTokens || [];
+    
+    if (pushTokens.length === 0) {
+      return res.status(200).json({ 
+        message: "No push tokens found for this user",
+        notificationSent: false
+      });
+    }
+
+    // Create notification payload
+    const notification = {
+      to: pushTokens.map(token => token.token),
+      sound: 'default',
+      title: title || 'Product Promotion!',
+      body: message || 'Special discount on your favorite products!',
+      data: {
+        type: 'product_promotion',
+        productId: productId || '',
+        discountAmount: discountAmount || '',
+        action: 'view_product',
+        userId: userId
+      },
+      priority: 'high'
+    };
+
+    console.log(`[POST /notifications/details] Sending promotion notification to User ${userId}`);
+
+    // TODO: Implement actual push notification sending via FCM/Expo
+
+    return res.status(200).json({ 
+      message: "Promotion notification sent successfully",
+      notificationSent: true,
+      tokensUsed: pushTokens.length,
+      note: "Push notification service not implemented yet. Add FCM/Expo integration."
+    });
+
+  } catch (error) {
+    console.error('[POST /notifications/details] Error:', error.message);
+    return res.status(500).json({ message: "Failed to send notification" });
+  }
+});
+
+// POST /users/push-token — save/update push tokens with stale token management
+router.post("/push-token", async (req, res) => {
+  try {
+    const { token, type } = req.body;
+    const authHeader = req.headers.authorization;
+    
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ message: "Authorization token required" });
+    }
+
+    const jwt = authHeader.substring(7); // Remove 'Bearer ' prefix
+    const decoded = jwt.decode(jwt);
+    
+    if (!decoded || !decoded.userId) {
+      return res.status(401).json({ message: "Invalid token" });
+    }
+
+    // Get user
+    const User = require("../models/User");
+    const user = await User.findById(decoded.userId);
+    
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    // Clean up stale tokens (remove tokens older than 30 days)
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const validTokens = (user.pushTokens || []).filter(tokenEntry => {
+      const tokenAge = new Date(tokenEntry.lastSeenAt || tokenEntry.createdAt);
+      return tokenAge > thirtyDaysAgo && tokenEntry.invalidatedAt;
+    });
+
+    // Remove stale/invalidated tokens
+    user.pushTokens = user.pushTokens.filter(tokenEntry => 
+      !validTokens.includes(tokenEntry)
+    );
+
+    // Check if token already exists
+    const existingToken = user.pushTokens.find(tokenEntry => 
+      tokenEntry.token === token && 
+      !tokenEntry.invalidatedAt
+    );
+
+    if (existingToken) {
+      // Update last seen timestamp
+      existingToken.lastSeenAt = new Date();
+      console.log(`[POST /push-token] Updated existing token for user ${decoded.userId}`);
+    } else {
+      // Add new token
+      user.pushTokens.push({
+        token: token,
+        type: type || 'expo',
+        createdAt: new Date(),
+        lastSeenAt: new Date(),
+        invalidatedAt: null
+      });
+      console.log(`[POST /push-token] Added new token for user ${decoded.userId}`);
+    }
+
+    // Save updated user
+    await user.save();
+
+    console.log(`[POST /push-token] User ${decoded.userId} now has ${user.pushTokens.length} active tokens`);
+
+    return res.status(200).json({
+      success: true,
+      message: "Push token saved successfully",
+      activeTokens: user.pushTokens.length,
+      staleTokensRemoved: validTokens.length
+    });
+
+  } catch (error) {
+    console.error('[POST /push-token] Error:', error.message);
+    return res.status(500).json({ message: "Failed to save push token" });
+  }
+});
+
+// DELETE /users/push-token — remove one or all push tokens for the current user
+router.delete("/push-token", authJwt, async (req, res) => {
+  try {
+    const token = String(req.body?.token || "").trim();
+    const removeAll = req.body?.removeAll === true;
+
+    const user = await User.findById(req.user.userId);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    if (removeAll) {
+      user.pushTokens = [];
+      user.pushToken = "";
+      user.pushTokenType = "";
+      await user.save();
+      return res.status(200).json({ success: true, removed: "all" });
+    }
+
+    if (!token) {
+      return res.status(400).json({ message: "token is required unless removeAll is true" });
+    }
+
+    user.pushTokens = (Array.isArray(user.pushTokens) ? user.pushTokens : [])
+      .filter((entry) => String(entry?.token || "") !== token);
+
+    if (String(user.pushToken || "") === token) {
+      user.pushToken = "";
+      user.pushTokenType = "";
+    }
+
+    await user.save();
+    return res.status(200).json({ success: true, removed: token });
+  } catch (error) {
+    console.error('[DELETE /push-token] Error:', error.message);
+    return res.status(500).json({ message: "Failed to remove push token" });
+  }
+});
+
+// POST /users/login/google
 router.post("/login/google", async (req, res) => {
   try {
     const rawToken = String(req.body?.accessToken || "").trim();
@@ -661,42 +1033,238 @@ router.post("/login/google", async (req, res) => {
   }
 });
 
-// DELETE /users/push-token — remove one or all push tokens for the current user
-router.delete("/push-token", authJwt, async (req, res) => {
+// GET /users/auth/google - Initiate Google OAuth for web
+router.get("/auth/google", (req, res) => {
+  const redirectUri = req.query.redirect_uri || req.headers.referer || "http://localhost:8081";
+  
+  // Store the frontend redirect URI in a state parameter
+  const state = Buffer.from(JSON.stringify({ redirectUri })).toString("base64");
+  
+  // Detect if mobile (custom scheme) or web (http/https)
+  const isMobile = !redirectUri.startsWith('http://') && !redirectUri.startsWith('https://');
+  
+  // Use appropriate redirect URI for Google
+  // Mobile: use request host (IP address)
+  // Web: use localhost (must match Google Cloud Console)
+  let googleRedirectUri;
+  if (isMobile) {
+    const protocol = req.headers['x-forwarded-proto'] || 'http';
+    const host = req.headers.host || `192.168.100.65:${config.port}`;
+    googleRedirectUri = `${protocol}://${host}${config.apiPrefix}/users/auth/google/callback`;
+  } else {
+    googleRedirectUri = `http://localhost:4001${config.apiPrefix}/users/auth/google/callback`;
+  }
+  
+  const authUrl = new URL("https://accounts.google.com/o/oauth2/v2/auth");
+  authUrl.searchParams.set("client_id", WEB_CLIENT_ID || config.googleClientId);
+  authUrl.searchParams.set("redirect_uri", googleRedirectUri);
+  authUrl.searchParams.set("response_type", "code");
+  authUrl.searchParams.set("scope", "openid email profile");
+  authUrl.searchParams.set("state", state);
+  authUrl.searchParams.set("prompt", "select_account");
+  
+  console.log("[GET /auth/google] Redirecting to Google OAuth");
+  console.log("  - frontend redirect:", redirectUri);
+  console.log("  - isMobile:", isMobile);
+  console.log("  - google redirect_uri:", googleRedirectUri);
+  console.log("  - client_id:", WEB_CLIENT_ID);
+  console.log("  - FULL AUTH URL:", authUrl.toString());
+  res.redirect(authUrl.toString());
+});
+
+// GET /users/auth/google/callback - Handle Google OAuth callback
+router.get("/auth/google/callback", async (req, res) => {
   try {
-    const token = String(req.body?.token || "").trim();
-    const removeAll = req.body?.removeAll === true;
-
-    const user = await User.findById(req.user.userId);
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
+    const { code, state, error } = req.query;
+    
+    if (error) {
+      console.error("[GET /auth/google/callback] OAuth error:", error);
+      return res.status(400).json({ message: "Google authentication failed", error });
     }
-
-    if (removeAll) {
-      user.pushTokens = [];
-      user.pushToken = "";
-      user.pushTokenType = "";
-      await user.save();
-      return res.status(200).json({ success: true, removed: "all" });
+    
+    if (!code) {
+      return res.status(400).json({ message: "Authorization code not received" });
     }
-
-    if (!token) {
-      return res.status(400).json({ message: "token is required unless removeAll is true" });
+    
+    // Parse state to get the original redirect URI
+    let frontendRedirectUri = "http://localhost:8081";
+    try {
+      const stateData = JSON.parse(Buffer.from(state, "base64").toString());
+      frontendRedirectUri = stateData.redirectUri || frontendRedirectUri;
+    } catch (e) {
+      console.error("[GET /auth/google/callback] Failed to parse state:", e.message);
     }
-
-    user.pushTokens = (Array.isArray(user.pushTokens) ? user.pushTokens : [])
-      .filter((entry) => String(entry?.token || "") !== token);
-
-    if (String(user.pushToken || "") === token) {
-      user.pushToken = "";
-      user.pushTokenType = "";
+    
+    // Detect if mobile and use appropriate redirect URI
+    const isMobileCallback = !frontendRedirectUri.startsWith('http://') && !frontendRedirectUri.startsWith('https://');
+    let googleRedirectUri;
+    if (isMobileCallback) {
+      const protocol = req.headers['x-forwarded-proto'] || 'http';
+      const host = req.headers.host || `192.168.100.65:${config.port}`;
+      googleRedirectUri = `${protocol}://${host}${config.apiPrefix}/users/auth/google/callback`;
+    } else {
+      googleRedirectUri = `http://localhost:4001${config.apiPrefix}/users/auth/google/callback`;
     }
+    console.log("[GET /auth/google/callback] isMobile:", isMobileCallback, "using redirect_uri:", googleRedirectUri);
+    const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        code,
+        client_id: WEB_CLIENT_ID || config.googleClientId,
+        client_secret: config.googleClientSecret,
+        redirect_uri: googleRedirectUri,
+        grant_type: "authorization_code",
+      }),
+    });
+    
+    const tokenData = await tokenResponse.json();
+    
+    if (!tokenResponse.ok || !tokenData.access_token) {
+      console.error("[GET /auth/google/callback] Token exchange failed:", tokenData);
+      return res.redirect(`${frontendRedirectUri}?error=${encodeURIComponent("Failed to exchange authorization code")}`);
+    }
+    
+    // Get user info from Google
+    const googleUser = await fetchGoogleUserInfo(tokenData.access_token);
+    const email = String(googleUser.email || "").trim().toLowerCase();
+    
+    if (!email || !googleUser.email_verified) {
+      return res.redirect(`${frontendRedirectUri}?error=${encodeURIComponent("Google account does not have a verified email")}`);
+    }
+    
+    // Find or create user
+    let user = await User.findOne({ email });
+    
+    if (user) {
+      if (user.authProvider !== "google") {
+        user.authProvider = "google";
+        user.providerId = googleUser.sub || "";
+        user.emailVerified = true;
+        await user.save();
+      }
+    } else {
+      const passwordHash = await bcrypt.hash(crypto.randomBytes(32).toString("hex"), 10);
+      user = await User.create({
+        name: String(googleUser.name || email.split("@")[0]).trim(),
+        email,
+        passwordHash,
+        phone: "",
+        authProvider: "google",
+        providerId: googleUser.sub || "",
+        emailVerified: true,
+        image: googleUser.picture || "",
+      });
+    }
+    
+    // Generate JWT
+    const payload = {
+      userId: user.id,
+      email: user.email,
+      isAdmin: user.isAdmin,
+    };
+    
+    const jwtToken = jwt.sign(payload, config.jwtSecret, { expiresIn: config.jwtExpiresIn });
+    
+    console.log("[GET /auth/google/callback] Google login successful:", email);
+    
+    // Check if frontendRedirectUri is a custom scheme (mobile app)
+    const isCustomScheme = !frontendRedirectUri.startsWith('http://') && !frontendRedirectUri.startsWith('https://');
+    
+    if (isCustomScheme) {
+      // For mobile apps, return HTML that redirects to custom scheme
+      const redirectUrl = `${frontendRedirectUri}?token=${jwtToken}`;
+      res.send(`
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Redirecting...</title>
+  <script>
+    window.location.href = "${redirectUrl}";
+    setTimeout(() => {
+      document.body.innerHTML = '<h2>Login successful!</h2><p>You can close this window and return to the app.</p>';
+    }, 100);
+  </script>
+</head>
+<body>
+  <h2>Login successful!</h2>
+  <p>Redirecting back to app...</p>
+  <p>If you are not redirected, <a href="${redirectUrl}">click here</a></p>
+</body>
+</html>`);
+    } else {
+      // For web, redirect normally
+      res.redirect(`${frontendRedirectUri}?token=${jwtToken}`);
+    }
+  } catch (err) {
+    console.error("[GET /auth/google/callback] Error:", err.message);
+    const fallbackUri = "http://localhost:8081";
+    res.redirect(`${fallbackUri}?error=${encodeURIComponent("Google login failed")}`);
+  }
+});
 
-    await user.save();
-    return res.status(200).json({ success: true, removed: token });
-  } catch (error) {
-    console.error('[DELETE /push-token] Error:', error.message);
-    return res.status(500).json({ message: "Failed to remove push token" });
+// POST /users/auth/firebase - Mobile Google Sign-In via Firebase
+router.post("/auth/firebase", async (req, res) => {
+  try {
+    const { idToken } = req.body;
+    
+    if (!idToken) {
+      return res.status(400).json({ message: "Firebase ID token is required" });
+    }
+    
+    // Verify Firebase ID token
+    const decodedToken = await verifyFirebaseToken(idToken);
+    const { uid, email, name, picture } = decodedToken;
+    
+    if (!email) {
+      return res.status(400).json({ message: "Google account does not have an email" });
+    }
+    
+    const normalizedEmail = String(email).trim().toLowerCase();
+    
+    // Find or create user
+    let user = await User.findOne({ email: normalizedEmail });
+    
+    if (user) {
+      if (user.authProvider !== "google") {
+        user.authProvider = "google";
+        user.providerId = uid || "";
+        user.emailVerified = true;
+        await user.save();
+      }
+    } else {
+      const passwordHash = await bcrypt.hash(crypto.randomBytes(32).toString("hex"), 10);
+      user = await User.create({
+        name: String(name || email.split("@")[0]).trim(),
+        email: normalizedEmail,
+        passwordHash,
+        phone: "",
+        authProvider: "google",
+        providerId: uid || "",
+        emailVerified: true,
+        image: picture || "",
+      });
+    }
+    
+    // Generate JWT
+    const payload = {
+      userId: user.id,
+      email: user.email,
+      isAdmin: user.isAdmin,
+    };
+    
+    const jwtToken = jwt.sign(payload, config.jwtSecret, { expiresIn: config.jwtExpiresIn });
+    
+    console.log("[POST /auth/firebase] Firebase login successful:", normalizedEmail);
+    
+    return res.status(200).json({ 
+      success: true,
+      token: jwtToken, 
+      user: payload 
+    });
+  } catch (err) {
+    console.error("[POST /auth/firebase] Error:", err.message);
+    return res.status(401).json({ message: "Firebase authentication failed", error: err.message });
   }
 });
 
