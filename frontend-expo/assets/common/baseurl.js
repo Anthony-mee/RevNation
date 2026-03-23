@@ -48,7 +48,8 @@ const RENDER_BACKEND_HOST = "https://revnation-x94f.onrender.com";
 
 const BACKEND_HOST =
   envHost ||
-  (Platform.OS === "web" ? LOCAL_BACKEND_HOST : RENDER_BACKEND_HOST) ||
+  RENDER_BACKEND_HOST ||
+  (Platform.OS === "web" ? LOCAL_BACKEND_HOST : null) ||
   EXPO_LAN_BACKEND_HOST ||
   EMULATOR_HOST;
 
