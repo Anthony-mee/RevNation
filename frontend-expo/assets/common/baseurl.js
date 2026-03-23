@@ -35,18 +35,22 @@ function resolveExpoLanBackendHost() {
   const isIPv4 = /^\d{1,3}(?:\.\d{1,3}){3}$/.test(hostCandidate);
   if (!isIPv4) return "";
 
-  return `http://${hostCandidate}:4000`;
+  return `http://${hostCandidate}:4001`;
 }
 
 const envHost = normalizeHost(process.env.EXPO_PUBLIC_BACKEND_HOST || process.env.BACKEND_HOST || "");
 const EXPO_LAN_BACKEND_HOST = resolveExpoLanBackendHost();
-const EMULATOR_HOST = Platform.OS === "android" ? "http://10.0.2.2:4000" : "http://localhost:4000";
-const LOCAL_BACKEND_HOST = "http://localhost:4000";
+const EMULATOR_HOST = Platform.OS === "android" ? "http://10.0.2.2:4001" : "http://localhost:4001";
+const LOCAL_BACKEND_HOST = "http://localhost:4001";
+
+// RENDER DEPLOYED BACKEND - Use this for production
+const RENDER_BACKEND_HOST = "https://revnation-x94f.onrender.com";
 
 const BACKEND_HOST =
-  Platform.OS === "web"
-    ? LOCAL_BACKEND_HOST
-    : envHost || EXPO_LAN_BACKEND_HOST || EMULATOR_HOST;
+  envHost ||
+  (Platform.OS === "web" ? LOCAL_BACKEND_HOST : RENDER_BACKEND_HOST) ||
+  EXPO_LAN_BACKEND_HOST ||
+  EMULATOR_HOST;
 
 const baseURL = `${BACKEND_HOST}/api/v1/`;
 
