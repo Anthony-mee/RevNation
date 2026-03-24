@@ -2,7 +2,7 @@
   "expo": {
     "name": "frontend-expo",
     "slug": "frontend-expo",
-    "scheme": "revnation",
+    "scheme": "com.peakplay.itcp239",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -30,8 +30,21 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#ea580c",
+          "defaultChannel": "default",
+          "projectId": "revnation-8b916"
+        }
+      ],
+      "expo-sqlite"
     ],
+    "notification": {
+      "channel": "default"
+    },
     "extra": {
       "eas": {
         "projectId": "c1fc75f7-b878-4076-8bf6-4b7fc35f0762"

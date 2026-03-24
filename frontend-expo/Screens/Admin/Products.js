@@ -169,6 +169,29 @@ const Products = () => {
                         <Ionicons name="warning-outline" size={16} color="#fb923c" />
                         <Text style={styles.quickActionText}>Stock Alerts</Text>
                     </TouchableOpacity>
+                    <TouchableOpacity 
+                        style={styles.quickActionBtn} 
+                        onPress={() => {
+                            try {
+                                console.log('🔘 User Management button PRESSED');
+                                navigation.navigate("User Management");
+                            } catch (error) {
+                                console.error('Navigation error:', error);
+                            }
+                        }}
+                        activeOpacity={0.85}
+                    >
+                        <Ionicons name="people-outline" size={16} color="#fb923c" />
+                        <Text style={styles.quickActionText}>User Management</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.quickActionBtn} onPress={() => navigation.navigate("Coupons")} activeOpacity={0.85}>
+                        <Ionicons name="ticket-outline" size={16} color="#fb923c" />
+                        <Text style={styles.quickActionText}>Coupons</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.quickActionBtn} onPress={() => navigation.navigate("Promotions")} activeOpacity={0.85}>
+                        <Ionicons name="megaphone-outline" size={16} color="#fb923c" />
+                        <Text style={styles.quickActionText}>Promotions</Text>
+                    </TouchableOpacity>
                 </View>
             </View>
 

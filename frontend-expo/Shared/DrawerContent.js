@@ -116,7 +116,7 @@ const DrawerContent = ({ navigation }) => {
                         {isAdmin ? (
                             <Drawer.Item
                                 label="Admin"
-                                onPress={() => navigation.navigate("Main", { screen: "Admin" })}
+                                onPress={() => navigation.navigate("Admin")}
                                 icon="cog"
                             />
                         ) : null}

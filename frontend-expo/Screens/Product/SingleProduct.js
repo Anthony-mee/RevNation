@@ -22,7 +22,7 @@ import { fetchReviews, submitReview, deleteReviewComment } from "../../Redux/Act
 import { resolveImageUrl } from "../../assets/common/imageUrl";
 import { isFavoriteItem, toggleFavoriteItem } from "../../assets/common/favorites";
 
-const SingleProduct = ({ route }) => {
+const SingleProduct = ({ route, navigation }) => {
     const [item] = useState(route.params?.item || {});
     const [isFavorite, setIsFavorite] = useState(false);
     const dispatch = useDispatch();
@@ -50,6 +50,15 @@ const SingleProduct = ({ route }) => {
         : rating;
     const totalReviews = reviews.length > 0 ? reviews.length : reviewCount;
     const ownReviewExists = reviews.some((review) => String(review?.user?.id || review?.user?._id || "") === currentUserId);
+    
+    const isResellProduct = item.productType === "resell";
+    const seller = item.createdBy;
+    // Handle both id and _id from populated createdBy
+    const sellerId = seller?.id || seller?._id;
+    const sellerName = seller?.name || "Reseller";
+    const sellerEmail = seller?.email || "";
+    const sellerImage = seller?.image || "";
+    const isOwnProduct = sellerId && String(sellerId) === currentUserId;
 
     const buildReviewFormData = async () => {
         const payload = new FormData();
@@ -382,6 +391,30 @@ const SingleProduct = ({ route }) => {
                             <Text style={styles.featureText}>Quality selected</Text>
                         </View>
                     </View>
+
+                    {isResellProduct && seller && !isOwnProduct && (
+                        <View style={styles.sellerCard}>
+                            <View style={styles.sellerHeader}>
+                                <Ionicons name="storefront-outline" size={20} color="#fb923c" />
+                                <Text style={styles.sellerTitle}>Reseller</Text>
+                            </View>
+                            <View style={styles.sellerInfo}>
+                                {sellerImage ? (
+                                    <Image source={{ uri: resolveImageUrl(sellerImage) }} style={styles.sellerAvatar} />
+                                ) : (
+                                    <View style={styles.sellerAvatarPlaceholder}>
+                                        <Text style={styles.sellerAvatarInitial}>
+                                            {sellerName.charAt(0).toUpperCase()}
+                                        </Text>
+                                    </View>
+                                )}
+                                <View style={styles.sellerDetails}>
+                                    <Text style={styles.sellerName}>{sellerName}</Text>
+                                    <Text style={styles.sellerEmail}>{sellerEmail}</Text>
+                                </View>
+                            </View>
+                        </View>
+                    )}
 
                     <View style={styles.sectionCard}>
                         <Text style={styles.sectionTitle}>Overview</Text>
@@ -1070,6 +1103,62 @@ const styles = StyleSheet.create({
         fontSize: 12,
         fontWeight: "700",
         marginTop: 2,
+    },
+    sellerCard: {
+        backgroundColor: "#111827",
+        borderRadius: 18,
+        borderWidth: 1,
+        borderColor: "rgba(251, 146, 60, 0.25)",
+        padding: 14,
+        marginBottom: 14,
+    },
+    sellerHeader: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 8,
+        marginBottom: 12,
+    },
+    sellerTitle: {
+        color: "#fb923c",
+        fontSize: 14,
+        fontWeight: "700",
+    },
+    sellerInfo: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 12,
+        marginBottom: 12,
+    },
+    sellerAvatar: {
+        width: 48,
+        height: 48,
+        borderRadius: 24,
+    },
+    sellerAvatarPlaceholder: {
+        width: 48,
+        height: 48,
+        borderRadius: 24,
+        backgroundColor: "#374151",
+        justifyContent: "center",
+        alignItems: "center",
+    },
+    sellerAvatarInitial: {
+        fontSize: 20,
+        fontWeight: "700",
+        color: "#f8fafc",
+    },
+    sellerDetails: {
+        flex: 1,
+    },
+    sellerName: {
+        color: "#f8fafc",
+        fontSize: 16,
+        fontWeight: "700",
+        marginBottom: 2,
+    },
+    sellerEmail: {
+        color: "#94a3b8",
+        fontSize: 12,
     },
 });
 

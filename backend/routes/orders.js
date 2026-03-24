@@ -5,6 +5,8 @@ const Order = require("../models/Order");
 const User = require("../models/User");
 const { sendToTokens } = require("../services/notifications");
 const { sendOrderReceiptEmail, sendOrderStatusUpdateEmail } = require("../services/emailService");
+const StockService = require("../services/stockService");
+const { createNotification } = require("./notifications");
 
 const router = express.Router();
 
@@ -150,13 +152,44 @@ router.post("/", authJwt, async (req, res) => {
       dateOrdered: new Date(),
     });
 
+    // Update stock levels and check for low stock alerts
+    const stockResult = await StockService.updateStockOnOrder(mappedItems, order.id);
+    
+    console.log(`[orders] Order ${order.id} created. Stock updated: ${stockResult.lowStockAlerts} low stock alerts created`);
+
+    // Send notification to admins
     const admins = await User.find({ isAdmin: true }, "pushToken pushTokenType pushTokens").lean();
     const adminTokens = admins.flatMap((admin) => User.collectActivePushTargets(admin));
     await sendToTokens(adminTokens, {
       title: "New order placed",
       body: `Order ${order.id} has been placed.`,
-      data: { orderId: order.id },
+      data: { orderId: order.id, type: 'new_order', action: 'view_order' },
     });
+
+    // Send notification to customer
+    const customerTokens = User.collectActivePushTargets(userProfile);
+    if (customerTokens.length > 0) {
+      await sendToTokens(customerTokens, {
+        title: '🎉 Order Confirmed!',
+        body: `Your order ${order.id} has been placed successfully.`,
+        data: { 
+          orderId: order.id, 
+          type: 'order_confirmed',
+          action: 'view_order',
+          userId: req.user.userId
+        },
+      });
+      console.log(`[orders] Customer notification sent for order ${order.id}`);
+    }
+
+    // Create notification record
+    await createNotification(
+      req.user.userId,
+      '🎉 Order Confirmed!',
+      `Your order ${order.id} has been placed successfully.`,
+      'order_confirmed',
+      { orderId: order.id, action: 'view_order' }
+    );
 
     let receiptEmail = {
       attempted: false,
@@ -293,11 +326,51 @@ router.put("/:id", authJwt, async (req, res) => {
     const recipient = await User.findById(existing.user, "pushToken pushTokenType pushTokens email name").lean();
     const recipientTokens = recipient ? User.collectActivePushTargets(recipient) : [];
     if (recipientTokens.length > 0) {
+      // Get appropriate emoji and message for status
+      let title, body, emoji;
+      switch (desiredStatus) {
+        case STATUS.SHIPPED:
+          emoji = '🚚';
+          title = 'Order Shipped!';
+          body = `Your order ${updated.id} is on its way!`;
+          break;
+        case STATUS.DELIVERED:
+          emoji = '🎉';
+          title = 'Order Delivered!';
+          body = `Your order ${updated.id} has been delivered successfully!`;
+          break;
+        case STATUS.CANCELLED:
+          emoji = '❌';
+          title = 'Order Cancelled';
+          body = `Your order ${updated.id} has been cancelled.`;
+          break;
+        default:
+          emoji = '📦';
+          title = 'Order Status Updated';
+          body = `Order ${updated.id} is now ${desiredStatus}.`;
+      }
+      
       await sendToTokens(recipientTokens, {
-        title: "Order status updated",
-        body: `Order ${updated.id} is now ${desiredStatus}.`,
-        data: { orderId: updated.id, status: desiredStatus },
+        title: `${emoji} ${title}`,
+        body: body,
+        data: { 
+          orderId: updated.id, 
+          status: desiredStatus, 
+          type: 'order_status_update',
+          action: 'view_order',
+          userId: existing.user
+        },
       });
+      console.log(`[orders] Status update notification sent for order ${updated.id}: ${desiredStatus}`);
+
+      // Create notification record
+      await createNotification(
+        existing.user,
+        `${emoji} ${title}`,
+        body,
+        'order_status_update',
+        { orderId: updated.id, status: desiredStatus, action: 'view_order' }
+      );
     }
 
     let statusEmail = {

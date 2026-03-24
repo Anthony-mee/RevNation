@@ -75,25 +75,26 @@ function AppInner() {
         let pushToken = null;
         let tokenType = 'unknown';
 
+        // Always try Expo Push Token first for Expo Go compatibility
         try {
-          const deviceToken = await Notifications.getDevicePushTokenAsync();
-          pushToken = deviceToken?.data;
-          tokenType = 'fcm';
-          console.log('[Push] Got FCM device token:', pushToken ? pushToken.substring(0, 40) + '...' : 'null');
-        } catch (fcmError) {
-          console.log('[Push] FCM token failed:', fcmError.message);
-          console.log('[Push] Trying Expo Push Token...');
+          const projectId = Constants.expoConfig?.extra?.eas?.projectId
+            || Constants.manifest?.extra?.eas?.projectId
+            || 'c1fc75f7-b878-4076-8bf6-4b7fc35f0762'; // Your actual project ID from app.json
+          console.log('[Push] Using projectId:', projectId);
+          const expoToken = await Notifications.getExpoPushTokenAsync({ projectId });
+          pushToken = expoToken?.data;
+          tokenType = 'expo';
+          console.log('[Push] Got Expo push token:', pushToken ? pushToken.substring(0, 40) + '...' : 'null');
+        } catch (expoError) {
+          console.log('[Push] Expo token failed:', expoError.message);
+          console.log('[Push] Trying FCM device token...');
           try {
-            const projectId = Constants.expoConfig?.extra?.eas?.projectId
-              || Constants.manifest?.extra?.eas?.projectId
-              || '6f747b51-b33e-4c6e-9d11-89bf760ec81a';
-            console.log('[Push] Using projectId:', projectId);
-            const expoToken = await Notifications.getExpoPushTokenAsync({ projectId });
-            pushToken = expoToken?.data;
-            tokenType = 'expo';
-            console.log('[Push] Got Expo push token:', pushToken ? pushToken.substring(0, 40) + '...' : 'null');
-          } catch (expoError) {
-            console.log('[Push] Expo token also failed:', expoError.message);
+            const deviceToken = await Notifications.getDevicePushTokenAsync();
+            pushToken = deviceToken?.data;
+            tokenType = 'fcm';
+            console.log('[Push] Got FCM device token:', pushToken ? pushToken.substring(0, 40) + '...' : 'null');
+          } catch (fcmError) {
+            console.log('[Push] FCM token also failed:', fcmError.message);
             return;
           }
         }
@@ -144,10 +145,25 @@ function AppInner() {
 
   useEffect(() => {
     const subscription = Notifications.addNotificationResponseReceivedListener((response) => {
-      const orderId = response?.notification?.request?.content?.data?.orderId;
-      if (orderId && context?.navigation) {
-        // Navigate to order details screen
-        context.navigation.navigate('My Orders', { screen: 'OrderDetails', params: { orderId } });
+      const data = response?.notification?.request?.content?.data;
+      console.log('[Push] Notification pressed:', data);
+      
+      if (!context?.navigation) return;
+      
+      // Handle different notification types
+      if (data.type === 'order_confirmed' || data.type === 'order_status_update' || data.type === 'new_order') {
+        if (data.orderId) {
+          context.navigation.navigate('My Orders', { screen: 'OrderDetails', params: { orderId: data.orderId } });
+        }
+      } else if (data.type === 'promotion' || data.type === 'discount') {
+        if (data.productId) {
+          context.navigation.navigate('Product', { screen: 'SingleProduct', params: { id: data.productId } });
+        } else if (data.categoryId) {
+          context.navigation.navigate('Product', { screen: 'Products', params: { categoryId: data.categoryId } });
+        } else {
+          // Navigate to products page if no specific product/category
+          context.navigation.navigate('Product', { screen: 'Products' });
+        }
       }
     });
     return () => subscription.remove();

@@ -18,8 +18,10 @@ const Confirm = ({ route }) => {
     const navigation = useNavigation();
 
     const [placingOrder, setPlacingOrder] = React.useState(false);
+    const [userProfile, setUserProfile] = React.useState(null);
+    const [loadingProfile, setLoadingProfile] = React.useState(true);
 
-    const { subtotal, shipping, total, itemCount } = useMemo(() => {
+    const { subtotal, shipping, total, itemCount, couponDiscount } = useMemo(() => {
         const safeItems = order?.orderItems || [];
         const computedSubtotal = safeItems.reduce(
             (sum, item) => sum + Number(item.price || 0) * Number(item.quantity || 1),
@@ -27,18 +29,65 @@ const Confirm = ({ route }) => {
         );
         const computedCount = safeItems.reduce((sum, item) => sum + Number(item.quantity || 1), 0);
         const computedShipping = computedSubtotal > 0 ? 159 : 0;
+        const computedCouponDiscount = order?.couponDiscount || 0;
 
         return {
             subtotal: computedSubtotal,
             shipping: computedShipping,
-            total: computedSubtotal + computedShipping,
+            total: computedSubtotal + computedShipping - computedCouponDiscount,
             itemCount: computedCount,
+            couponDiscount: computedCouponDiscount,
         };
     }, [order]);
+
+    // Load user profile to check ban status
+    React.useEffect(() => {
+        let isMounted = true;
+
+        const loadUserProfile = async () => {
+            setLoadingProfile(true);
+            try {
+                const jwt = await AsyncStorage.getItem("jwt");
+                if (!jwt || !order?.user) {
+                    if (isMounted) setUserProfile(null);
+                    return;
+                }
+
+                const res = await axios.get(`${baseURL}users/${order.user}`, {
+                    headers: { Authorization: `Bearer ${jwt}` },
+                });
+
+                if (isMounted) {
+                    setUserProfile(res.data);
+                }
+            } catch (error) {
+                if (isMounted) setUserProfile(null);
+            } finally {
+                if (isMounted) setLoadingProfile(false);
+            }
+        };
+
+        loadUserProfile();
+
+        return () => {
+            isMounted = false;
+        };
+    }, [order?.user]);
 
     const confirmOrder = async () => {
         try {
             if (placingOrder) {
+                return;
+            }
+
+            // Check if user is banned
+            if (userProfile && userProfile.isBanned) {
+                Toast.show({
+                    topOffset: 60,
+                    type: "error",
+                    text1: "Account Banned",
+                    text2: "Your account is banned. You cannot place orders.",
+                });
                 return;
             }
 
@@ -131,6 +180,16 @@ const Confirm = ({ route }) => {
     return (
         <View style={styles.screen}>
             <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+                {/* Banned User Warning */}
+                {userProfile && userProfile.isBanned && (
+                    <View style={styles.bannedWarning}>
+                        <Ionicons name="warning" size={20} color="#ef4444" />
+                        <View style={styles.bannedWarningText}>
+                            <Text style={styles.bannedWarningTitle}>Account Banned</Text>
+                            <Text style={styles.bannedWarningSub}>You cannot place orders while your account is banned.</Text>
+                        </View>
+                    </View>
+                )}
                 <View style={styles.bannerCard}>
                     <Ionicons name="flame-outline" size={16} color="#fb923c" />
                     <Text style={styles.bannerText}>Ready to place your order</Text>
@@ -185,6 +244,12 @@ const Confirm = ({ route }) => {
                         <Text style={styles.infoLabel}>Shipping subtotal</Text>
                         <Text style={styles.infoValue}>P{shipping.toFixed(2)}</Text>
                     </View>
+                    {couponDiscount > 0 && (
+                        <View style={styles.infoRow}>
+                            <Text style={styles.infoLabel}>Coupon discount</Text>
+                            <Text style={[styles.infoValue, styles.discountValue]}>-P{couponDiscount.toFixed(2)}</Text>
+                        </View>
+                    )}
                     <View style={styles.totalRow}>
                         <Text style={styles.totalLabel}>Total</Text>
                         <Text style={styles.totalValue}>P{total.toFixed(2)}</Text>
@@ -206,9 +271,9 @@ const Confirm = ({ route }) => {
                     <Text style={styles.bottomTotalValue}>P{total.toFixed(2)}</Text>
                 </View>
                 <TouchableOpacity
-                    style={[styles.placeOrderBtn, placingOrder && styles.placeOrderBtnDisabled]}
+                    style={[styles.placeOrderBtn, (placingOrder || (userProfile && userProfile.isBanned)) && styles.placeOrderBtnDisabled]}
                     onPress={confirmOrder}
-                    disabled={placingOrder}
+                    disabled={placingOrder || (userProfile && userProfile.isBanned)}
                     activeOpacity={0.9}
                 >
                     {placingOrder ? (
@@ -230,6 +295,31 @@ const styles = StyleSheet.create({
     content: {
         padding: 14,
         paddingBottom: 96,
+    },
+    bannedWarning: {
+        backgroundColor: "rgba(239, 68, 68, 0.1)",
+        borderWidth: 1,
+        borderColor: "rgba(239, 68, 68, 0.3)",
+        borderRadius: 12,
+        padding: 12,
+        marginBottom: 16,
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 12,
+    },
+    bannedWarningText: {
+        flex: 1,
+    },
+    bannedWarningTitle: {
+        color: "#ef4444",
+        fontSize: 16,
+        fontWeight: "700",
+        marginBottom: 2,
+    },
+    bannedWarningSub: {
+        color: "#f87171",
+        fontSize: 14,
+        lineHeight: 20,
     },
     bannerCard: {
         backgroundColor: "#131927",
@@ -362,6 +452,9 @@ const styles = StyleSheet.create({
         color: "#fb923c",
         fontSize: 33,
         fontWeight: "900",
+    },
+    discountValue: {
+        color: "#10b981",
     },
     paymentMethodText: {
         color: "#f8fafc",

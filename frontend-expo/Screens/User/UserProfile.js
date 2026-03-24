@@ -466,6 +466,24 @@ const UserProfile = () => {
 
                             <TouchableOpacity
                                 style={styles.quickActionButton}
+                                onPress={() => navigation.navigate("User Coupons")}
+                                activeOpacity={0.82}
+                            >
+                                <Ionicons name="pricetag-outline" size={18} color="#fb923c" />
+                                <Text style={styles.quickActionText}>Coupons</Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                                style={styles.quickActionButton}
+                                onPress={() => navigation.navigate("Messages")}
+                                activeOpacity={0.82}
+                            >
+                                <Ionicons name="chatbubble-outline" size={18} color="#fb923c" />
+                                <Text style={styles.quickActionText}>Messages</Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                                style={styles.quickActionButton}
                                 onPress={() => navigation.navigate("Favorites")}
                                 activeOpacity={0.82}
                             >

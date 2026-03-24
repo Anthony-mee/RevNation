@@ -268,25 +268,72 @@ const ProductForm = (props) => {
         console.log('[ProductForm] Submitting to:', url);
         console.log('[ProductForm] Config:', config);
         console.log('[ProductForm] FormData:', formData);
-        const request = productId
-            ? axios.put(url, formData, config)
-            : axios.post(url, formData, config);
+        // On Android/Expo Go, axios + multipart FormData can throw ERR_NETWORK even when the API is reachable.
+        // Use fetch for native multipart uploads; keep axios for web.
+        const submitNativeMultipart = async () => {
+            try {
+                const method = productId ? "PUT" : "POST";
+                const res = await fetch(url, {
+                    method,
+                    headers: {
+                        Authorization: "Bearer " + token,
+                        // Do NOT set Content-Type; fetch will add the correct multipart boundary.
+                    },
+                    body: formData,
+                });
 
-        request
-            .then((res) => {
-                console.log('[ProductForm] Success:', res?.status, res?.data);
-                (res.status === 200 || res.status === 201) && thenNav();
-            })
-            .catch((err) => {
-                console.log('[ProductForm] Error details:', {
+                const text = await res.text();
+                let data = null;
+                try { data = JSON.parse(text); } catch (_e) { data = text; }
+
+                console.log("[ProductForm] Success:", res.status, data);
+                if (res.status === 200 || res.status === 201) {
+                    thenNav();
+                    return;
+                }
+
+                const message =
+                    (data && typeof data === "object" && data.message)
+                        ? data.message
+                        : (typeof data === "string" && data.trim())
+                            ? data
+                            : `Request failed (${res.status})`;
+                throw new Error(message);
+            } catch (err) {
+                console.log("[ProductForm] Error details:", {
                     url,
                     config,
-                    error: err?.toJSON ? err.toJSON() : err,
-                    response: err?.response,
+                    error: err?.message || err,
                 });
                 catchErr(err);
-            })
-            .finally(() => setIsSubmitting(false));
+            } finally {
+                setIsSubmitting(false);
+            }
+        };
+
+        if (Platform.OS === "web") {
+            const request = productId
+                ? axios.put(url, formData, config)
+                : axios.post(url, formData, config);
+
+            request
+                .then((res) => {
+                    console.log('[ProductForm] Success:', res?.status, res?.data);
+                    (res.status === 200 || res.status === 201) && thenNav();
+                })
+                .catch((err) => {
+                    console.log('[ProductForm] Error details:', {
+                        url,
+                        config,
+                        error: err?.toJSON ? err.toJSON() : err,
+                        response: err?.response,
+                    });
+                    catchErr(err);
+                })
+                .finally(() => setIsSubmitting(false));
+        } else {
+            submitNativeMultipart();
+        }
     };
 
     const previewImageUri = mainImage

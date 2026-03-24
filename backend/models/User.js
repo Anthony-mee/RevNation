@@ -38,6 +38,31 @@ const userSchema = new mongoose.Schema(
     pushTokens: { type: [pushTokenSchema], default: [] },
     walletBalance: { type: Number, default: 0, min: 0 },
     walletLastUpdatedAt: { type: Date, default: null },
+    // Admin management fields
+    isBanned: { type: Boolean, default: false },
+    isDisabled: { type: Boolean, default: false },
+    warnings: [{
+      reason: { type: String, required: true },
+      message: { type: String, required: true },
+      severity: { type: String, enum: ['low', 'medium', 'high'], default: 'medium' },
+      createdAt: { type: Date, default: Date.now },
+      createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
+    }],
+    banInfo: {
+      reason: { type: String },
+      permanent: { type: Boolean, default: false },
+      duration: { type: Number }, // days
+      bannedAt: { type: Date },
+      expiresAt: { type: Date },
+      bannedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
+    },
+    disableInfo: {
+      reason: { type: String },
+      disabledAt: { type: Date },
+      disabledBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
+    },
+    claimedCoupons: [{ type: mongoose.Schema.Types.ObjectId, ref: "Coupon" }],
+    lastLoginAt: { type: Date },
   },
   { timestamps: true }
 );

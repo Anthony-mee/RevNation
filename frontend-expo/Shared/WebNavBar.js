@@ -29,6 +29,7 @@ const WebNavBar = () => {
     const [productsDropdownOpen, setProductsDropdownOpen] = useState(false);
     const [screenWidth, setScreenWidth] = useState(width);
     const [userProfile, setUserProfile] = useState(null);
+    const [unreadCount, setUnreadCount] = useState(0);
 
     useEffect(() => {
         const subscription = Dimensions.addEventListener("change", ({ window }) => {
@@ -51,6 +52,21 @@ const WebNavBar = () => {
                 .catch((error) => console.log("[WebNavBar] Auth error:", error));
         } else {
             setUserProfile(null);
+        }
+    }, [context.stateUser.isAuthenticated, context.stateUser.user.userId]);
+
+    // Fetch unread notification count
+    useEffect(() => {
+        if (context.stateUser.isAuthenticated && context.stateUser.user.userId) {
+            AsyncStorage.getItem("jwt")
+                .then((jwt) => {
+                    axios.get(`${baseURL}notifications/count`, {
+                        headers: { Authorization: `Bearer ${jwt}` },
+                    })
+                    .then((response) => setUnreadCount(response.data.unreadCount || 0))
+                    .catch((error) => console.log("[WebNavBar] Error fetching notifications:", error));
+                })
+                .catch((error) => console.log("[WebNavBar] Error getting token for notifications:", error));
         }
     }, [context.stateUser.isAuthenticated, context.stateUser.user.userId]);
 
@@ -141,27 +157,58 @@ const WebNavBar = () => {
                             </View>
 
                             {context.stateUser.isAuthenticated && !context.stateUser.user.isAdmin && (
-                                <TouchableOpacity 
-                                    style={styles.navLink}
-                                    onPress={() => {
-                                        setProductsDropdownOpen(false);
-                                        navigation.navigate("My Orders");
-                                    }}
-                                >
-                                    <Text style={styles.navLinkText}>My Orders</Text>
-                                </TouchableOpacity>
+                                <>
+                                    <TouchableOpacity 
+                                        style={styles.navLink}
+                                        onPress={() => {
+                                            setProductsDropdownOpen(false);
+                                            navigation.navigate("Messages");
+                                        }}
+                                    >
+                                        <Text style={styles.navLinkText}>Messages</Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity 
+                                        style={styles.navLink}
+                                        onPress={() => {
+                                            setProductsDropdownOpen(false);
+                                            navigation.navigate("User Coupons");
+                                        }}
+                                    >
+                                        <Text style={styles.navLinkText}>Coupons</Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity 
+                                        style={styles.navLink}
+                                        onPress={() => {
+                                            setProductsDropdownOpen(false);
+                                            navigation.navigate("My Orders");
+                                        }}
+                                    >
+                                        <Text style={styles.navLinkText}>My Orders</Text>
+                                    </TouchableOpacity>
+                                </>
                             )}
 
                             {context.stateUser.isAuthenticated && context.stateUser.user.isAdmin && (
-                                <TouchableOpacity 
-                                    style={styles.navLink}
-                                    onPress={() => {
-                                        setProductsDropdownOpen(false);
-                                        navigation.navigate("Admin");
-                                    }}
-                                >
-                                    <Text style={styles.navLinkText}>Admin</Text>
-                                </TouchableOpacity>
+                                <>
+                                    <TouchableOpacity 
+                                        style={styles.navLink}
+                                        onPress={() => {
+                                            setProductsDropdownOpen(false);
+                                            navigation.navigate("AdminMessages");
+                                        }}
+                                    >
+                                        <Text style={styles.navLinkText}>Messages</Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity 
+                                        style={styles.navLink}
+                                        onPress={() => {
+                                            setProductsDropdownOpen(false);
+                                            navigation.navigate("Admin");
+                                        }}
+                                    >
+                                        <Text style={styles.navLinkText}>Admin</Text>
+                                    </TouchableOpacity>
+                                </>
                             )}
                         </View>
                     )}
@@ -181,6 +228,21 @@ const WebNavBar = () => {
                                     </Badge>
                                 )}
                             </TouchableOpacity>
+
+                            {/* Notifications */}
+                            {context.stateUser.isAuthenticated && (
+                                <TouchableOpacity 
+                                    style={styles.cartButton}
+                                    onPress={() => navigation.navigate("User", { screen: "Notifications" })}
+                                >
+                                    <Ionicons name="notifications-outline" size={22} color="#374151" />
+                                    {unreadCount > 0 && (
+                                        <Badge style={[styles.badge, styles.notificationBadge]} size={20}>
+                                            {unreadCount > 99 ? "99+" : unreadCount}
+                                        </Badge>
+                                    )}
+                                </TouchableOpacity>
+                            )}
 
                             {/* User Menu */}
                             {context.stateUser.isAuthenticated ? (
@@ -248,6 +310,19 @@ const WebNavBar = () => {
                                         </Badge>
                                     )}
                                 </TouchableOpacity>
+                                {context.stateUser.isAuthenticated && (
+                                    <TouchableOpacity 
+                                        style={[styles.cartButton, styles.mobileIconButton]}
+                                        onPress={() => navigation.navigate("User", { screen: "Notifications" })}
+                                    >
+                                        <Ionicons name="notifications-outline" size={20} color="#ffffff" />
+                                        {unreadCount > 0 && (
+                                            <Badge style={[styles.badge, styles.notificationBadge]} size={20}>
+                                                {unreadCount > 99 ? "99+" : unreadCount}
+                                            </Badge>
+                                        )}
+                                    </TouchableOpacity>
+                                )}
                                 <TouchableOpacity
                                     style={styles.mobileProfileRow}
                                     onPress={() => navigation.navigate("User", { screen: context.stateUser.isAuthenticated ? "User Profile" : "Login" })}
@@ -326,15 +401,35 @@ const WebNavBar = () => {
                     </TouchableOpacity>
 
                     {context.stateUser.isAuthenticated && !context.stateUser.user.isAdmin && (
-                        <TouchableOpacity 
-                            style={styles.mobileMenuLink}
-                            onPress={() => {
-                                navigation.navigate("My Orders");
-                                setMenuOpen(false);
-                            }}
-                        >
-                            <Text style={styles.mobileMenuLinkText}>My Orders</Text>
-                        </TouchableOpacity>
+                        <>
+                            <TouchableOpacity 
+                                style={styles.mobileMenuLink}
+                                onPress={() => {
+                                    navigation.navigate("Messages");
+                                    setMenuOpen(false);
+                                }}
+                            >
+                                <Text style={styles.mobileMenuLinkText}>Messages</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity 
+                                style={styles.mobileMenuLink}
+                                onPress={() => {
+                                    navigation.navigate("User Coupons");
+                                    setMenuOpen(false);
+                                }}
+                            >
+                                <Text style={styles.mobileMenuLinkText}>Coupons</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity 
+                                style={styles.mobileMenuLink}
+                                onPress={() => {
+                                    navigation.navigate("My Orders");
+                                    setMenuOpen(false);
+                                }}
+                            >
+                                <Text style={styles.mobileMenuLinkText}>My Orders</Text>
+                            </TouchableOpacity>
+                        </>
                     )}
 
                     {context.stateUser.isAuthenticated && context.stateUser.user.isAdmin && (
@@ -570,9 +665,21 @@ const styles = StyleSheet.create({
     },
     badge: {
         position: "absolute",
-        top: 0,
-        right: 0,
+        top: -6,
+        right: -6,
         backgroundColor: "#ef4444",
+        color: "#ffffff",
+        fontWeight: "600",
+        fontSize: 10,
+        minWidth: 16,
+        height: 16,
+        borderRadius: 8,
+        alignItems: "center",
+        justifyContent: "center",
+        paddingHorizontal: 2,
+    },
+    notificationBadge: {
+        backgroundColor: "#ea580c",
     },
     hamburgerButton: {
         padding: 6,

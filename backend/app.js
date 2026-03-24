@@ -10,6 +10,10 @@ const productRoutes = require("./routes/products");
 const serviceRoutes = require("./routes/services");
 const orderRoutes = require("./routes/orders");
 const stockAlertRoutes = require("./routes/stockAlerts");
+const adminRoutes = require("./routes/admin");
+const promotionRoutes = require("./routes/promotions");
+const couponRoutes = require("./routes/coupons");
+const notificationRoutes = require("./routes/notifications");
 const {
   getUploadDirName,
   getUploadAbsolutePath,
@@ -35,6 +39,10 @@ app.use(`${config.apiPrefix}/products`, productRoutes);
 app.use(`${config.apiPrefix}/services`, serviceRoutes);
 app.use(`${config.apiPrefix}/orders`, orderRoutes);
 app.use(`${config.apiPrefix}/stock-alerts`, stockAlertRoutes);
+app.use(`${config.apiPrefix}/admin`, adminRoutes);
+app.use(`${config.apiPrefix}/promotions`, promotionRoutes);
+app.use(`${config.apiPrefix}/coupons`, couponRoutes);
+app.use(`${config.apiPrefix}/notifications`, notificationRoutes);
 
 app.get(`${config.apiPrefix}/health`, (_req, res) => {
   res.status(200).json({ ok: true, message: "Backend config scaffold is running." });

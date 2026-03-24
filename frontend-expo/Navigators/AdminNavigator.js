@@ -9,6 +9,8 @@ import Services from "../Screens/Admin/Services";
 import ServiceForm from "../Screens/Admin/ServiceForm";
 import Categories from "../Screens/Admin/Categories";
 import StockAlerts from "../Screens/Admin/StockAlerts";
+import UserManagement from "../Screens/Admin/UserManagement";
+import Coupons from "../Screens/Admin/Coupons";
 import AuthGlobal from "../Context/Store/AuthGlobal";
 
 const Stack = createStackNavigator();
@@ -44,6 +46,8 @@ const AdminNavigator = () => {
             <Stack.Screen name="Stock Alerts" component={StockAlerts} />
             <Stack.Screen name="ProductForm" component={ProductForm} />
             <Stack.Screen name="ServiceForm" component={ServiceForm} />
+            <Stack.Screen name="User Management" component={UserManagement} options={{ title: "User Management" }} />
+            <Stack.Screen name="Coupons" component={Coupons} options={{ title: "Promotions & Coupons" }} />
         </Stack.Navigator>
     );
 };

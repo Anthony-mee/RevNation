@@ -10,6 +10,7 @@ import CartNavigator from "./CartNavigator";
 import UserNavigator from "./UserNavigator";
 import AdminNavigator from "./AdminNavigator";
 import MyOrders from "../Screens/User/MyOrders";
+import UserCoupons from "../Screens/UserCoupons";
 
 const Stack = createStackNavigator();
 
@@ -22,6 +23,7 @@ const ScreensNavigator = () => {
             <Stack.Screen name="User" component={UserNavigator} />
             <Stack.Screen name="Admin" component={AdminNavigator} />
             <Stack.Screen name="My Orders" component={MyOrders} />
+            <Stack.Screen name="User Coupons" component={UserCoupons} />
         </Stack.Navigator>
     );
 };

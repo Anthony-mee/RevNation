@@ -173,30 +173,81 @@ const ServiceForm = (props) => {
         };
 
         const serviceId = item?.id ?? item?._id;
-        const request = serviceId
-            ? axios.put(`${baseURL}services/${serviceId}`, formData, config)
-            : axios.post(`${baseURL}services`, formData, config);
 
-        request
-            .then((res) => {
+        const handleError = (err) => {
+            const responseData = err?.response?.data;
+            const message =
+                (typeof responseData === "string" && responseData.includes("MulterError"))
+                    ? "Image is too large. Please choose a smaller photo."
+                    : err?.response?.data?.message || err?.message || "Something went wrong";
+            Toast.show({ topOffset: 60, type: "error", text1: message });
+        };
+
+        const handleSuccess = () => {
+            Toast.show({
+                topOffset: 60,
+                type: "success",
+                text1: serviceId ? "Service updated" : "Service added",
+            });
+            setTimeout(() => navigation.navigate(returnScreen), 500);
+        };
+
+        const submitNativeMultipart = async () => {
+            try {
+                const method = serviceId ? "PUT" : "POST";
+                const url = serviceId ? `${baseURL}services/${serviceId}` : `${baseURL}services`;
+                const res = await fetch(url, {
+                    method,
+                    headers: {
+                        Authorization: `Bearer ${token}`,
+                        // Let fetch set the multipart boundary.
+                    },
+                    body: formData,
+                });
+
+                const text = await res.text();
+                let data = null;
+                try { data = JSON.parse(text); } catch (_e) { data = text; }
+
+                console.log("[ServiceForm] Success:", res.status, data);
                 if (res.status === 200 || res.status === 201) {
-                    Toast.show({
-                        topOffset: 60,
-                        type: "success",
-                        text1: serviceId ? "Service updated" : "Service added",
-                    });
-                    setTimeout(() => navigation.navigate(returnScreen), 500);
+                    handleSuccess();
+                    return;
                 }
-            })
-            .catch((err) => {
-                const responseData = err?.response?.data;
+
                 const message =
-                    (typeof responseData === "string" && responseData.includes("MulterError"))
-                        ? "Image is too large. Please choose a smaller photo."
-                        : err?.response?.data?.message || err?.message || "Something went wrong";
-                Toast.show({ topOffset: 60, type: "error", text1: message });
-            })
-            .finally(() => setIsSubmitting(false));
+                    (data && typeof data === "object" && data.message)
+                        ? data.message
+                        : (typeof data === "string" && data.trim())
+                            ? data
+                            : `Request failed (${res.status})`;
+                throw new Error(message);
+            } catch (err) {
+                console.log("[ServiceForm] Error:", err?.message || err);
+                handleError(err);
+            } finally {
+                setIsSubmitting(false);
+            }
+        };
+
+        if (Platform.OS === "web") {
+            const request = serviceId
+                ? axios.put(`${baseURL}services/${serviceId}`, formData, config)
+                : axios.post(`${baseURL}services`, formData, config);
+
+            request
+                .then((res) => {
+                    if (res.status === 200 || res.status === 201) {
+                        handleSuccess();
+                    }
+                })
+                .catch((err) => {
+                    handleError(err);
+                })
+                .finally(() => setIsSubmitting(false));
+        } else {
+            submitNativeMultipart();
+        }
     };
 
     const previewImageUri = mainImage

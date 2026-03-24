@@ -8,6 +8,7 @@ import {
     Image,
     TouchableOpacity,
     Platform,
+    Alert,
 } from "react-native";
 import { Surface } from "react-native-paper";
 import { Ionicons } from "@expo/vector-icons";
@@ -19,6 +20,7 @@ import baseURL from "../../assets/common/baseurl";
 import { resolveImageUrl } from "../../assets/common/imageUrl";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import { fetchProducts } from "../../Redux/Actions/productActions";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 var { height, width } = Dimensions.get("window");
 const isWeb = Platform.OS === "web";
@@ -63,6 +65,8 @@ const ProductContainer = () => {
     const [active, setActive] = useState(-1);
     const [productsCtg, setProductsCtg] = useState([]);
     const [featuredProducts, setFeaturedProducts] = useState([]);
+    const [services, setServices] = useState([]);
+    const [promotions, setPromotions] = useState([]);
 
     // Keep derived lists in sync whenever the Redux products list changes
     React.useEffect(() => {
@@ -83,6 +87,30 @@ const ProductContainer = () => {
         }
     };
 
+    const handleClaimCoupon = async (promotionId) => {
+        console.log("[handleClaimCoupon] Starting claim for promotionId:", promotionId);
+        try {
+            const token = await AsyncStorage.getItem("jwt");
+            console.log("[handleClaimCoupon] Got token:", token ? "Yes" : "No");
+            
+            if (!token) {
+                Alert.alert("Error", "Please login to claim coupons");
+                return;
+            }
+            
+            console.log("[handleClaimCoupon] Making request to:", `${baseURL}promotions/${promotionId}/claim-coupon`);
+            const response = await axios.post(`${baseURL}promotions/${promotionId}/claim-coupon`, {}, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            console.log("[handleClaimCoupon] Success:", response.data);
+            Alert.alert("Success!", `Coupon claimed: ${response.data.coupon.code}\nUse it at checkout for discounts!`);
+        } catch (error) {
+            console.error("[handleClaimCoupon] Error:", error);
+            console.error("[handleClaimCoupon] Error response:", error.response);
+            Alert.alert("Error", error.response?.data?.message || "Failed to claim coupon");
+        }
+    };
+
     useFocusEffect(
         useCallback(() => {
             setActive(-1);
@@ -92,10 +120,32 @@ const ProductContainer = () => {
             axios
                 .get(`${baseURL}categories`)
                 .then((res) => setCategories(res.data))
-                .catch((error) => console.log("Api categories call error"));
+                .catch((_error) => console.log("Api categories call error"));
+
+            axios
+                .get(`${baseURL}services`)
+                .then((res) => setServices(Array.isArray(res.data) ? res.data.slice(0, 3) : []))
+                .catch((_error) => setServices([]));
+
+            // Fetch active promotions
+            axios
+                .get(`${baseURL}promotions/active`)
+                .then((res) => {
+                    console.log("Promotions API response:", res.data);
+                    const promotionsData = res.data.promotions || [];
+                    console.log("Promotions data:", promotionsData);
+                    setPromotions(promotionsData);
+                })
+                .catch((error) => {
+                    console.error("Api promotions call error:", error);
+                    console.error("Error response:", error.response);
+                    setPromotions([]);
+                });
 
             return () => {
                 setCategories([]);
+                setServices([]);
+                setPromotions([]);
             };
         }, [dispatch])
     );
@@ -137,7 +187,68 @@ const ProductContainer = () => {
                     </View>
                 </View>
 
-                {/* ─── SERVICES ─── */}
+                {/* ─── PROMOTIONS BANNER ─── */}
+                {true && ( // Changed from promotions.length > 0 to true for debugging
+                    <View style={styles.promotionsWrap}>
+                        <View style={styles.promotionsHeader}>
+                            <Text style={styles.promotionsLabel}>SPECIAL OFFERS</Text>
+                            <Text style={styles.promotionsHeading}>Active Promotions ({promotions.length})</Text>
+                        </View>
+                        {promotions.length > 0 ? (
+                            <ScrollView 
+                                horizontal 
+                                showsHorizontalScrollIndicator={false}
+                                contentContainerStyle={styles.promotionsScroll}
+                            >
+                                {promotions.map((promo) => (
+                                    <View key={promo.id || promo._id} style={styles.promotionCard}>
+                                        <View style={styles.promotionBadge}>
+                                            <Ionicons name="megaphone" size={16} color={COLORS.white} />
+                                            <Text style={styles.promotionBadgeText}>
+                                                {promo.type === 'percentage' ? `${promo.value}% OFF` : 
+                                                 promo.type === 'fixed' ? `₱${promo.value} OFF` : 
+                                                 promo.type === 'free_shipping' ? 'FREE SHIPPING' : 
+                                                 'SPECIAL OFFER'}
+                                            </Text>
+                                        </View>
+                                        <Text style={styles.promotionTitle}>{promo.title}</Text>
+                                        <Text style={styles.promotionDesc} numberOfLines={2}>{promo.description}</Text>
+                                        {promo.minAmount > 0 && (
+                                            <Text style={styles.promotionMinAmount}>
+                                                Min. purchase: ₱{Number(promo.minAmount).toLocaleString()}
+                                            </Text>
+                                        )}
+                                        <View style={styles.promotionActions}>
+                                            <TouchableOpacity 
+                                                style={styles.promotionClaimBtn}
+                                                activeOpacity={0.85}
+                                                onPress={() => handleClaimCoupon(promo.id)}
+                                            >
+                                                <Ionicons name="gift-outline" size={14} color={COLORS.accent} />
+                                                <Text style={styles.promotionClaimBtnText}>Claim Coupon</Text>
+                                            </TouchableOpacity>
+                                            <TouchableOpacity 
+                                                style={styles.promotionBtn}
+                                                activeOpacity={0.85}
+                                                onPress={() => navigation.navigate("ShopProducts")}
+                                            >
+                                                <Text style={styles.promotionBtnText}>Shop Now</Text>
+                                                <Ionicons name="arrow-forward" size={14} color={COLORS.accent} />
+                                            </TouchableOpacity>
+                                        </View>
+                                    </View>
+                                ))}
+                            </ScrollView>
+                        ) : (
+                            <View style={styles.promotionCard}>
+                                <Text style={styles.promotionTitle}>No Active Promotions</Text>
+                                <Text style={styles.promotionDesc}>Check back soon for special offers and discounts!</Text>
+                            </View>
+                        )}
+                    </View>
+                )}
+
+                {/* ─── SERVICES (STATIC OVERVIEW) ─── */}
                 <View style={styles.servicesWrap}>
                     <Text style={styles.servicesLabel}>OUR EXPERTISE</Text>
                     <Text style={styles.servicesHeading}>What We Do Best</Text>
@@ -162,6 +273,52 @@ const ProductContainer = () => {
                             </TouchableOpacity>
                         ))}
                     </View>
+                </View>
+
+                {/* ─── SERVICES (LIVE FROM BACKEND) ─── */}
+                <View style={styles.servicesListWrap}>
+                    <View style={styles.servicesListHeader}>
+                        <View>
+                            <Text style={styles.servicesLabel}>WORKSHOP SERVICES</Text>
+                            <Text style={styles.servicesHeading}>Book The Garage</Text>
+                        </View>
+                        {services.length > 0 && (
+                            <TouchableOpacity
+                                style={styles.viewAllBtn}
+                                onPress={() => navigation.navigate("Services")}
+                            >
+                                <Text style={styles.viewAllText}>View All</Text>
+                                <Ionicons name="arrow-forward" size={14} color={COLORS.accent} />
+                            </TouchableOpacity>
+                        )}
+                    </View>
+
+                    {services.length > 0 ? (
+                        <View style={styles.servicesCardsRow}>
+                            {services.map((svc) => (
+                                <View key={svc.id || svc._id} style={styles.serviceLiveCard}>
+                                    <Image
+                                        source={{ uri: resolveImageUrl(svc.image) }}
+                                        style={styles.serviceLiveImage}
+                                        resizeMode="cover"
+                                    />
+                                    <View style={styles.serviceLiveBody}>
+                                        <Text style={styles.serviceLiveName} numberOfLines={1}>
+                                            {svc.name || "Service"}
+                                        </Text>
+                                        <Text style={styles.serviceLiveMeta}>
+                                            {svc.duration || "Flexible duration"}
+                                        </Text>
+                                        <Text style={styles.serviceLivePrice}>
+                                            ₱{Number(svc.price || 0).toLocaleString()}
+                                        </Text>
+                                    </View>
+                                </View>
+                            ))}
+                        </View>
+                    ) : (
+                        <Text style={styles.servicesEmptyText}>No services published yet.</Text>
+                    )}
                 </View>
 
                 {/* ─── ABOUT / WHO WE ARE ─── */}
@@ -409,7 +566,7 @@ const styles = StyleSheet.create({
         fontWeight: "600",
     },
 
-    /* ── Services ── */
+    /* ── Services (static overview) ── */
     servicesWrap: {
         paddingHorizontal: pad,
         paddingTop: 48,
@@ -469,6 +626,166 @@ const styles = StyleSheet.create({
         height: 3,
         backgroundColor: COLORS.accent,
         opacity: 0.5,
+    },
+
+    /* ── Services (live list) ── */
+    servicesListWrap: {
+        paddingHorizontal: pad,
+        paddingTop: 12,
+    },
+    servicesListHeader: {
+        flexDirection: "row",
+        justifyContent: "space-between",
+        alignItems: "flex-end",
+        marginBottom: 12,
+    },
+    servicesCardsRow: {
+        flexDirection: isMobile ? "column" : "row",
+        gap: 10,
+    },
+    serviceLiveCard: {
+        flex: 1,
+        backgroundColor: COLORS.card,
+        borderRadius: 14,
+        borderWidth: 1,
+        borderColor: COLORS.cardBorder,
+        overflow: "hidden",
+    },
+    serviceLiveImage: {
+        width: "100%",
+        height: 120,
+        backgroundColor: "#020617",
+    },
+    serviceLiveBody: {
+        padding: 10,
+        gap: 4,
+    },
+    serviceLiveName: {
+        color: COLORS.white,
+        fontSize: 14,
+        fontWeight: "700",
+    },
+    serviceLiveMeta: {
+        color: COLORS.textMuted,
+        fontSize: 12,
+    },
+    serviceLivePrice: {
+        color: COLORS.accentLight,
+        fontSize: 13,
+        fontWeight: "800",
+    },
+    servicesEmptyText: {
+        color: COLORS.textDim,
+        fontSize: 13,
+    },
+
+    /* ── Promotions ── */
+    promotionsWrap: {
+        paddingHorizontal: pad,
+        paddingTop: 32,
+        paddingBottom: 16,
+    },
+    promotionsHeader: {
+        marginBottom: 16,
+    },
+    promotionsLabel: {
+        color: COLORS.accent,
+        fontSize: 11,
+        fontWeight: "800",
+        letterSpacing: 2.5,
+        marginBottom: 6,
+    },
+    promotionsHeading: {
+        color: COLORS.white,
+        fontSize: isMobile ? 20 : 28,
+        fontWeight: "900",
+    },
+    promotionsScroll: {
+        gap: 12,
+    },
+    promotionCard: {
+        backgroundColor: COLORS.card,
+        borderRadius: 14,
+        borderWidth: 1,
+        borderColor: COLORS.cardBorder,
+        padding: 16,
+        width: isMobile ? 280 : 320,
+        marginRight: 12,
+    },
+    promotionBadge: {
+        flexDirection: "row",
+        alignItems: "center",
+        backgroundColor: COLORS.accent,
+        paddingHorizontal: 8,
+        paddingVertical: 6,
+        borderRadius: 6,
+        alignSelf: "flex-start",
+        marginBottom: 12,
+        gap: 6,
+    },
+    promotionBadgeText: {
+        color: COLORS.white,
+        fontSize: 11,
+        fontWeight: "700",
+        letterSpacing: 0.3,
+    },
+    promotionTitle: {
+        color: COLORS.white,
+        fontSize: 16,
+        fontWeight: "800",
+        marginBottom: 6,
+    },
+    promotionDesc: {
+        color: COLORS.textMuted,
+        fontSize: 13,
+        lineHeight: 18,
+        marginBottom: 12,
+    },
+    promotionMinAmount: {
+        color: COLORS.textDim,
+        fontSize: 12,
+        marginBottom: 12,
+    },
+    promotionBtn: {
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: "rgba(234, 88, 12, 0.1)",
+        borderWidth: 1,
+        borderColor: COLORS.accent,
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        borderRadius: 6,
+        gap: 6,
+        flex: 1,
+    },
+    promotionBtnText: {
+        color: COLORS.accent,
+        fontSize: 12,
+        fontWeight: "700",
+    },
+    promotionActions: {
+        flexDirection: "row",
+        gap: 8,
+        marginTop: 12,
+    },
+    promotionClaimBtn: {
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: "rgba(139, 92, 246, 0.1)",
+        borderWidth: 1,
+        borderColor: "#8b5cf6",
+        paddingHorizontal: 8,
+        paddingVertical: 6,
+        borderRadius: 6,
+        gap: 4,
+        flex: 1,
+    },
+    promotionClaimBtnText: {
+        color: "#8b5cf6",
+        fontSize: 11,
+        fontWeight: "700",
     },
 
     /* ── About ── */

@@ -4,9 +4,11 @@ import Login from "../Screens/User/Login";
 import Register from "../Screens/User/Register";
 import UserProfile from "../Screens/User/UserProfile";
 import MyOrders from "../Screens/User/MyOrders";
-import NotificationCenter from "../Screens/User/NotificationCenter";
+import Notifications from "../Screens/User/Notifications";
 import Favorites from "../Screens/User/Favorites";
 import Wallet from "../Screens/User/Wallet";
+import ForgotPassword from "../Screens/User/ForgotPassword";
+import UserCoupons from "../Screens/UserCoupons";
 
 const Stack = createStackNavigator();
 
@@ -17,9 +19,11 @@ const UserNavigator = () => {
             <Stack.Screen name="Register" component={Register} />
             <Stack.Screen name="User Profile" component={UserProfile} />
             <Stack.Screen name="My Orders" component={MyOrders} />
-            <Stack.Screen name="Notifications" component={NotificationCenter} />
+            <Stack.Screen name="Notifications" component={Notifications} />
             <Stack.Screen name="Favorites" component={Favorites} />
             <Stack.Screen name="Wallet" component={Wallet} />
+            <Stack.Screen name="User Coupons" component={UserCoupons} />
+            <Stack.Screen name="ForgotPassword" component={ForgotPassword} />
         </Stack.Navigator>
     );
 };

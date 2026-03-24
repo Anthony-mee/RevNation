@@ -15,6 +15,7 @@ const Checkout = () => {
     const [loadingProfile, setLoadingProfile] = useState(true);
     const [profileReady, setProfileReady] = useState(false);
     const [orderItems, setOrderItems] = useState([]);
+    const [userProfile, setUserProfile] = useState(null);
     const [address, setAddress] = useState("");
     const [address2, setAddress2] = useState("");
     const [city, setCity] = useState("");
@@ -59,6 +60,21 @@ const Checkout = () => {
                         return;
                     }
 
+                    // Store user profile for ban checks
+                    setUserProfile(profile);
+
+                    // Check if user is banned
+                    if (profile.isBanned) {
+                        setProfileReady(false);
+                        Toast.show({
+                            topOffset: 60,
+                            type: "error",
+                            text1: "Account Banned",
+                            text2: "Your account is banned. You cannot place orders.",
+                        });
+                        return;
+                    }
+
                     if (profile.phone) setPhone(profile.phone);
                     if (profile.deliveryAddress1) setAddress(profile.deliveryAddress1);
                     if (profile.deliveryAddress2) setAddress2(profile.deliveryAddress2);
@@ -93,6 +109,17 @@ const Checkout = () => {
     const goToPayment = async () => {
         if (loadingProfile) {
             Toast.show({ topOffset: 60, type: "info", text1: "Loading profile..." });
+            return;
+        }
+
+        // Check if user is banned
+        if (userProfile && userProfile.isBanned) {
+            Toast.show({
+                topOffset: 60,
+                type: "error",
+                text1: "Account Banned",
+                text2: "Your account is banned. You cannot place orders.",
+            });
             return;
         }
 
@@ -138,6 +165,18 @@ const Checkout = () => {
 
                 <View style={styles.sectionCard}>
                     <Text style={styles.sectionTitle}>Contact & Address</Text>
+                    
+                    {/* Banned User Warning */}
+                    {userProfile && userProfile.isBanned && (
+                        <View style={styles.bannedWarning}>
+                            <Ionicons name="warning" size={20} color="#ef4444" />
+                            <View style={styles.bannedWarningText}>
+                                <Text style={styles.bannedWarningTitle}>Account Banned</Text>
+                                <Text style={styles.bannedWarningSub}>You cannot place orders while your account is banned.</Text>
+                            </View>
+                        </View>
+                    )}
+                    
                     {loadingProfile ? (
                         <View style={styles.loadingRow}>
                             <ActivityIndicator color="#ea580c" size="small" />
@@ -257,6 +296,31 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: "700",
         marginBottom: 10,
+    },
+    bannedWarning: {
+        backgroundColor: "rgba(239, 68, 68, 0.1)",
+        borderWidth: 1,
+        borderColor: "rgba(239, 68, 68, 0.3)",
+        borderRadius: 12,
+        padding: 12,
+        marginBottom: 16,
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 12,
+    },
+    bannedWarningText: {
+        flex: 1,
+    },
+    bannedWarningTitle: {
+        color: "#ef4444",
+        fontSize: 16,
+        fontWeight: "700",
+        marginBottom: 2,
+    },
+    bannedWarningSub: {
+        color: "#f87171",
+        fontSize: 14,
+        lineHeight: 20,
     },
     loadingRow: {
         flexDirection: "row",

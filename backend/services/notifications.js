@@ -9,13 +9,13 @@ let firebaseInitialized = false;
 function initFirebase() {
   if (firebaseInitialized) return;
   if (!config.fcmServiceAccountPath) {
-    console.warn("[notifications] Missing FCM_SERVICE_ACCOUNT_PATH, skipping Firebase init.");
+    console.log("[notifications] Missing FCM_SERVICE_ACCOUNT_PATH, using Expo Push only");
     return;
   }
 
   const resolvedPath = path.resolve(process.cwd(), config.fcmServiceAccountPath);
   if (!fs.existsSync(resolvedPath)) {
-    console.warn(`[notifications] Service account file not found: ${resolvedPath}`);
+    console.log(`[notifications] Service account file not found: ${resolvedPath}, using Expo Push only`);
     return;
   }
 
@@ -79,10 +79,12 @@ async function sendExpo(tokens, title, body, data) {
 
   const messages = tokens.map((token) => ({
     to: token,
-    sound: "default",
+    sound: 'default',
     title: title || "",
     body: body || "",
     data: data || {},
+    priority: 'high',
+    channelId: 'default'
   }));
 
   try {
@@ -97,6 +99,7 @@ async function sendExpo(tokens, title, body, data) {
     });
     const result = await response.json();
     console.log(`[notifications] Expo push sent to ${tokens.length} token(s):`, JSON.stringify(result.data?.map(d => d.status) || result));
+    console.log(`[notifications] Full Expo response:`, JSON.stringify(result, null, 2));
 
     const staleTokens = [];
     if (Array.isArray(result?.data)) {

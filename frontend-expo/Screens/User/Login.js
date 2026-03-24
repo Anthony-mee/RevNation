@@ -1,22 +1,24 @@
 import React, { useState, useContext, useEffect } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Image } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Image, Platform } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
-import * as Google from "expo-auth-session/providers/google";
 import * as WebBrowser from "expo-web-browser";
 import { jwtDecode } from "jwt-decode";
 import FormContainer from "../../Shared/FormContainer";
 import AuthGlobal from "../../Context/Store/AuthGlobal";
 import { loginUser, setCurrentUser } from "../../Context/Actions/Auth.actions";
 import { setAuthToken } from "../../assets/common/tokenStorage";
-import baseURL from "../../assets/common/baseurl";
 import Input from "../../Shared/Input";
 import Toast from "react-native-toast-message";
 
 WebBrowser.maybeCompleteAuthSession();
 
-const ANDROID_CLIENT_ID = "149350867139-adcm1spa9lebod4f8h3u69bsbhsm557a.apps.googleusercontent.com";
-const WEB_CLIENT_ID = "149350867139-r5q67endg3ip9k024imq8oj07gf2700e.apps.googleusercontent.com";
+const BACKEND_LOCAL = "http://localhost:4001";
+
+// Check if running on web
+const isWeb = Platform.OS === "web";
+
+const TUNNEL_URL = "https://shaggy-cobras-stand.loca.lt";
 
 const Login = () => {
     const context = useContext(AuthGlobal);
@@ -27,57 +29,59 @@ const Login = () => {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isGoogleLoading, setIsGoogleLoading] = useState(false);
 
-    const [, googleResponse, promptGoogleAsync] = Google.useAuthRequest({
-        androidClientId: ANDROID_CLIENT_ID,
-        webClientId: WEB_CLIENT_ID,
-    });
-
-    // Handle Google OAuth response
-    useEffect(() => {
-        if (googleResponse?.type === "success") {
-            const accessToken = googleResponse.authentication?.accessToken;
-            if (accessToken) {
-                handleGoogleToken(accessToken);
-            } else {
-                Toast.show({
-                    topOffset: 60,
-                    type: "error",
-                    text1: "Google Sign-In Failed",
-                    text2: "No access token received",
-                });
-            }
-        } else if (googleResponse?.type === "error") {
-            Toast.show({
-                topOffset: 60,
-                type: "error",
-                text1: "Google Sign-In Failed",
-                text2: googleResponse.error?.message || "Please try again",
-            });
-        }
-    }, [googleResponse]);
-
-    const handleGoogleToken = async (accessToken) => {
+    // Handle Google Auth
+    const handleGoogleLogin = async () => {
+        console.log("Starting Google login...");
         setIsGoogleLoading(true);
+        
         try {
-            const res = await fetch(`${baseURL}users/login/google`, {
-                method: "POST",
-                headers: { Accept: "application/json", "Content-Type": "application/json" },
-                body: JSON.stringify({ accessToken }),
-            });
-            const data = await res.json().catch(() => ({}));
-            if (!res.ok) throw new Error(data?.message || "Google login failed");
-            await setAuthToken(data.token);
-            const decoded = jwtDecode(data.token);
-            context.dispatch(setCurrentUser(decoded, data.user));
-        } catch (err) {
+            if (isWeb) {
+                // Web: Use backend OAuth flow
+                const oauthUrl = `${BACKEND_LOCAL}/api/v1/users/auth/google?redirect_uri=${encodeURIComponent(window.location.origin)}`;
+                console.log("Web OAuth URL:", oauthUrl);
+                window.location.href = oauthUrl;
+                return;
+            }
+            
+            // Mobile: Use tunnel for OAuth
+            const appRedirect = 'com.peakplay.itcp239:///';
+            const oauthUrl = `${TUNNEL_URL}/api/v1/users/auth/google?redirect_uri=${encodeURIComponent(appRedirect)}`;
+            
+            console.log("Mobile OAuth URL:", oauthUrl);
+            
+            const result = await WebBrowser.openAuthSessionAsync(oauthUrl, appRedirect);
+            console.log("Auth result:", result);
+            
+            if (result.type === 'success' && result.url) {
+                const url = new URL(result.url);
+                const token = url.searchParams.get('token');
+                const errorMsg = url.searchParams.get('error');
+                
+                if (token) {
+                    await setAuthToken(token);
+                    const decoded = jwtDecode(token);
+                    context.dispatch(setCurrentUser(decoded, decoded));
+                    Toast.show({
+                        topOffset: 60,
+                        type: "success",
+                        text1: "Login Successful",
+                        text2: "Welcome back!",
+                    });
+                } else if (errorMsg) {
+                    throw new Error(decodeURIComponent(errorMsg));
+                }
+            } else if (result.type === 'cancel') {
+                console.log("User cancelled auth");
+            }
+        } catch (/** @type {any} */ error) {
+            console.error("Google login error:", error);
+            setIsGoogleLoading(false);
             Toast.show({
                 topOffset: 60,
                 type: "error",
                 text1: "Google Sign-In Failed",
-                text2: String(err?.message || "Please try again"),
+                text2: error?.message || "Please try again",
             });
-        } finally {
-            setIsGoogleLoading(false);
         }
     };
 
@@ -92,10 +96,6 @@ const Login = () => {
         }
     };
 
-    const handleGoogleLogin = () => {
-        promptGoogleAsync();
-    };
-
     const handleFacebookLogin = () => {
         Toast.show({
             topOffset: 60,
@@ -105,11 +105,75 @@ const Login = () => {
         });
     };
 
+    const handleForgotPassword = () => {
+        if (!email) {
+            Toast.show({
+                topOffset: 60,
+                type: "error",
+                text1: "Email Required",
+                text2: "Please enter your email address first",
+            });
+            return;
+        }
+        
+        // Navigate to forgot password screen
+        navigation.navigate("ForgotPassword");
+    };
+
     useEffect(() => {
         if (context.stateUser.isAuthenticated === true) {
             navigation.navigate("Home", { screen: "Main" });
         }
     }, [context.stateUser.isAuthenticated]);
+
+    // Check for token in URL (for web OAuth callback)
+    useEffect(() => {
+        if (isWeb && typeof window !== 'undefined') {
+            const urlParams = new URLSearchParams(window.location.search);
+            const token = urlParams.get("token");
+            const error = urlParams.get("error");
+            
+            if (token) {
+                console.log("Token received from URL:", token.substring(0, 20) + "...");
+                // Clear URL parameters
+                window.history.replaceState({}, document.title, window.location.pathname);
+                
+                // Process the token
+                const processToken = async () => {
+                    try {
+                        await setAuthToken(token);
+                        const decoded = jwtDecode(token);
+                        context.dispatch(setCurrentUser(decoded, decoded));
+                        Toast.show({
+                            topOffset: 60,
+                            type: "success",
+                            text1: "Login Successful",
+                            text2: "Welcome back!",
+                        });
+                    } catch (/** @type {any} */ err) {
+                        console.error('Token processing error:', err);
+                        Toast.show({
+                            topOffset: 60,
+                            type: "error",
+                            text1: "Login Failed",
+                            text2: String(err?.message || "Invalid token"),
+                        });
+                    }
+                };
+                
+                processToken();
+            } else if (error) {
+                console.error("OAuth error from URL:", error);
+                window.history.replaceState({}, document.title, window.location.pathname);
+                Toast.show({
+                    topOffset: 60,
+                    type: "error",
+                    text1: "Google Sign-In Failed",
+                    text2: decodeURIComponent(error),
+                });
+            }
+        }
+    }, []);
 
     return (
         <FormContainer title="">
@@ -155,14 +219,16 @@ const Login = () => {
                             <ActivityIndicator size="small" color="#60a5fa" />
                             <Text style={styles.loadingText}>Signing in...</Text>
                         </View>
-                    ) : null}
-                    <TouchableOpacity 
-                        style={[styles.loginButton, isSubmitting && styles.buttonDisabled]} 
-                        onPress={() => handleSubmit()} 
-                        disabled={isSubmitting}
-                        activeOpacity={0.85}
-                    >
-                        <Text style={styles.loginButtonText}>SIGN IN</Text>
+                    ) : (
+                        <TouchableOpacity style={styles.loginButton} onPress={() => handleSubmit()}>
+                            <Text style={styles.loginButtonText}>Sign In</Text>
+                        </TouchableOpacity>
+                    )}
+                </View>
+                
+                <View style={styles.forgotPasswordContainer}>
+                    <TouchableOpacity onPress={() => handleForgotPassword()}>
+                        <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
                     </TouchableOpacity>
                 </View>
                 
@@ -379,6 +445,17 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: "700",
         letterSpacing: 1,
+    },
+    forgotPasswordContainer: {
+        width: "100%",
+        alignItems: "center",
+        marginTop: 16,
+    },
+    forgotPasswordText: {
+        color: "#60a5fa",
+        fontSize: 14,
+        fontWeight: "600",
+        textDecorationLine: "underline",
     },
 });
 

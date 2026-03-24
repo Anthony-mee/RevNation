@@ -1,5 +1,5 @@
 import React, { useContext, useEffect, useMemo, useState } from "react";
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View, TextInput, ActivityIndicator } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -20,6 +20,13 @@ const Payment = ({ route }) => {
     const [selected, setSelected] = useState("wallet");
     const [walletBalance, setWalletBalance] = useState(0);
     const [walletLoading, setWalletLoading] = useState(true);
+    const [userProfile, setUserProfile] = useState(null);
+    const [profileLoading, setProfileLoading] = useState(true);
+    const [couponCode, setCouponCode] = useState("");
+    const [couponDiscount, setCouponDiscount] = useState(0);
+    const [couponLoading, setCouponLoading] = useState(false);
+    const [couponError, setCouponError] = useState("");
+    const [appliedCoupon, setAppliedCoupon] = useState(null);
     const context = useContext(AuthGlobal);
 
     const subtotal = useMemo(
@@ -27,11 +34,34 @@ const Payment = ({ route }) => {
         [order]
     );
     const shipping = subtotal > 0 ? 159 : 0;
-    const total = subtotal + shipping;
-    const walletInsufficient = selected === "wallet" && walletBalance < subtotal;
+    const total = subtotal + shipping - couponDiscount;
+    const walletInsufficient = selected === "wallet" && walletBalance < total;
 
     useEffect(() => {
         let isMounted = true;
+
+        const loadUserProfile = async () => {
+            setProfileLoading(true);
+            try {
+                const jwt = await AsyncStorage.getItem("jwt");
+                if (!jwt || !context?.stateUser?.user?.userId) {
+                    if (isMounted) setUserProfile(null);
+                    return;
+                }
+
+                const res = await axios.get(`${baseURL}users/${context.stateUser.user.userId}`, {
+                    headers: { Authorization: `Bearer ${jwt}` },
+                });
+
+                if (isMounted) {
+                    setUserProfile(res.data);
+                }
+            } catch (error) {
+                if (isMounted) setUserProfile(null);
+            } finally {
+                if (isMounted) setProfileLoading(false);
+            }
+        };
 
         const loadWallet = async () => {
             setWalletLoading(true);
@@ -60,6 +90,7 @@ const Payment = ({ route }) => {
             }
         };
 
+        loadUserProfile();
         loadWallet();
 
         return () => {
@@ -69,15 +100,176 @@ const Payment = ({ route }) => {
 
     const selectedMethod = PAYMENT_METHODS.find((m) => m.key === selected);
 
+    const validateCoupon = async () => {
+        if (!couponCode.trim()) {
+            setCouponError("Please enter a coupon code");
+            return;
+        }
+
+        setCouponLoading(true);
+        setCouponError("");
+
+        try {
+            const jwt = await AsyncStorage.getItem("jwt");
+            const productIds = order?.orderItems?.map(item => item.product || item.id) || [];
+
+            const response = await axios.post(`${baseURL}coupons/validate`, {
+                code: couponCode.trim().toUpperCase(),
+                orderAmount: subtotal,
+                productIds
+            }, {
+                headers: { Authorization: `Bearer ${jwt}` }
+            });
+
+            if (response.data.valid) {
+                setCouponDiscount(response.data.coupon.discount);
+                setAppliedCoupon(response.data.coupon);
+                setCouponError("");
+            }
+        } catch (error) {
+            const errorMsg = error.response?.data?.message || "Invalid coupon code";
+            setCouponError(errorMsg);
+            setCouponDiscount(0);
+            setAppliedCoupon(null);
+        } finally {
+            setCouponLoading(false);
+        }
+    };
+
+    const applyCoupon = async () => {
+        if (!couponCode.trim()) {
+            setCouponError("Please enter a coupon code");
+            return;
+        }
+
+        setCouponLoading(true);
+        setCouponError("");
+
+        try {
+            const jwt = await AsyncStorage.getItem("jwt");
+            const productIds = order?.orderItems?.map(item => item.product || item.id) || [];
+
+            const response = await axios.post(`${baseURL}coupons/apply`, {
+                code: couponCode.trim().toUpperCase(),
+                orderAmount: subtotal,
+                productIds
+            }, {
+                headers: { Authorization: `Bearer ${jwt}` }
+            });
+
+            if (response.data.applied) {
+                setCouponDiscount(response.data.discount);
+                setAppliedCoupon(response.data.coupon);
+                setCouponError("");
+                setCouponCode("");
+            }
+        } catch (error) {
+            const errorMsg = error.response?.data?.message || "Failed to apply coupon";
+            setCouponError(errorMsg);
+            setCouponDiscount(0);
+            setAppliedCoupon(null);
+        } finally {
+            setCouponLoading(false);
+        }
+    };
+
+    const removeCoupon = () => {
+        setCouponCode("");
+        setCouponDiscount(0);
+        setAppliedCoupon(null);
+        setCouponError("");
+    };
+
+    const handleReviewOrder = () => {
+        // Check if user is banned
+        if (userProfile && userProfile.isBanned) {
+            alert("Account Banned", "Your account is banned. You cannot place orders.");
+            return;
+        }
+
+        navigation.navigate("Confirm", {
+            order: {
+                ...order,
+                couponDiscount,
+                appliedCoupon
+            },
+            paymentMethod: selectedMethod?.title || "Payment",
+            paymentMethodKey: selectedMethod?.key || "cod",
+        });
+    };
+
     return (
         <View style={styles.screen}>
             <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+                {/* Banned User Warning */}
+                {userProfile && userProfile.isBanned && (
+                    <View style={styles.bannedWarning}>
+                        <Ionicons name="warning" size={20} color="#ef4444" />
+                        <View style={styles.bannedWarningText}>
+                            <Text style={styles.bannedWarningTitle}>Account Banned</Text>
+                            <Text style={styles.bannedWarningSub}>You cannot complete payment while your account is banned.</Text>
+                        </View>
+                    </View>
+                )}
+                
                 <View style={styles.heroCard}>
                     <View style={styles.heroRow}>
                         <Ionicons name="card-outline" size={20} color="#c2410c" />
                         <Text style={styles.heroTitle}>Payment Method</Text>
                     </View>
                     <Text style={styles.heroSub}>Choose how you want to complete this order.</Text>
+                </View>
+
+                <View style={styles.sectionCard}>
+                    <View style={styles.couponHeader}>
+                        <Text style={styles.sectionTitle}>Coupon Code</Text>
+                        <TouchableOpacity 
+                            style={styles.viewCouponsButton}
+                            onPress={() => navigation.navigate("User Coupons")}
+                        >
+                            <Text style={styles.viewCouponsText}>View Coupons</Text>
+                        </TouchableOpacity>
+                    </View>
+                    <View style={styles.couponContainer}>
+                        <TextInput
+                            style={[styles.couponInput, couponError && styles.couponInputError]}
+                            placeholder="Enter coupon code"
+                            value={couponCode}
+                            onChangeText={setCouponCode}
+                            editable={!appliedCoupon}
+                            placeholderTextColor="#64748b"
+                        />
+                        {!appliedCoupon ? (
+                            <TouchableOpacity 
+                                style={[styles.couponButton, couponLoading && styles.couponButtonDisabled]}
+                                onPress={applyCoupon}
+                                disabled={couponLoading}
+                            >
+                                {couponLoading ? (
+                                    <ActivityIndicator size="small" color="#fff" />
+                                ) : (
+                                    <Text style={styles.couponButtonText}>Apply</Text>
+                                )}
+                            </TouchableOpacity>
+                        ) : (
+                            <TouchableOpacity 
+                                style={styles.removeCouponButton}
+                                onPress={removeCoupon}
+                            >
+                                <Text style={styles.removeCouponButtonText}>Remove</Text>
+                            </TouchableOpacity>
+                        )}
+                    </View>
+                    {couponError ? (
+                        <Text style={styles.couponError}>{couponError}</Text>
+                    ) : appliedCoupon ? (
+                        <View style={styles.appliedCouponContainer}>
+                            <Ionicons name="checkmark-circle" size={16} color="#10b981" />
+                            <Text style={styles.appliedCouponText}>
+                                {appliedCoupon.title} - P{couponDiscount.toFixed(2)} off
+                            </Text>
+                        </View>
+                    ) : null}
                 </View>
 
                 <View style={styles.sectionCard}>
@@ -90,6 +282,12 @@ const Payment = ({ route }) => {
                         <Text style={styles.infoLabel}>Shipping fee</Text>
                         <Text style={styles.infoValue}>P{shipping.toFixed(2)}</Text>
                     </View>
+                    {couponDiscount > 0 && (
+                        <View style={styles.infoRow}>
+                            <Text style={styles.infoLabel}>Coupon discount</Text>
+                            <Text style={[styles.infoValue, styles.discountValue]}>-P{couponDiscount.toFixed(2)}</Text>
+                        </View>
+                    )}
                     <View style={styles.totalRow}>
                         <Text style={styles.totalLabel}>Total</Text>
                         <Text style={styles.totalValue}>P{total.toFixed(2)}</Text>
@@ -149,13 +347,9 @@ const Payment = ({ route }) => {
                     <Text style={styles.bottomMethod}>{selectedMethod?.title || "Payment"}</Text>
                 </View>
                 <TouchableOpacity
-                    style={[styles.continueBtn, walletInsufficient && styles.continueBtnDisabled]}
-                    disabled={walletInsufficient}
-                    onPress={() => navigation.navigate("Confirm", {
-                        order,
-                        paymentMethod: selectedMethod?.title || "Payment",
-                        paymentMethodKey: selectedMethod?.key || "cod",
-                    })}
+                    style={[styles.continueBtn, (walletInsufficient || (userProfile && userProfile.isBanned)) && styles.continueBtnDisabled]}
+                    disabled={walletInsufficient || (userProfile && userProfile.isBanned)}
+                    onPress={handleReviewOrder}
                     activeOpacity={0.9}
                 >
                     <Text style={styles.continueText}>Review Order</Text>
@@ -210,6 +404,121 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: "700",
         marginBottom: 10,
+    },
+    couponHeader: {
+        flexDirection: "row",
+        justifyContent: "space-between",
+        alignItems: "center",
+        marginBottom: 10,
+    },
+    viewCouponsButton: {
+        backgroundColor: "rgba(234, 88, 12, 0.2)",
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 6,
+        borderWidth: 1,
+        borderColor: "rgba(234, 88, 12, 0.3)",
+    },
+    viewCouponsText: {
+        color: "#ea580c",
+        fontSize: 12,
+        fontWeight: "600",
+    },
+    bannedWarning: {
+        backgroundColor: "rgba(239, 68, 68, 0.1)",
+        borderWidth: 1,
+        borderColor: "rgba(239, 68, 68, 0.3)",
+        borderRadius: 12,
+        padding: 12,
+        marginBottom: 16,
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 12,
+    },
+    bannedWarningText: {
+        flex: 1,
+    },
+    bannedWarningTitle: {
+        color: "#ef4444",
+        fontSize: 16,
+        fontWeight: "700",
+        marginBottom: 2,
+    },
+    bannedWarningSub: {
+        color: "#f87171",
+        fontSize: 14,
+        lineHeight: 20,
+    },
+    couponContainer: {
+        flexDirection: "row",
+        gap: 10,
+        alignItems: "center",
+    },
+    couponInput: {
+        flex: 1,
+        backgroundColor: "#1e293b",
+        borderWidth: 1,
+        borderColor: "rgba(148, 163, 184, 0.2)",
+        borderRadius: 8,
+        padding: 12,
+        color: "#f8fafc",
+        fontSize: 14,
+    },
+    couponInputError: {
+        borderColor: "#ef4444",
+    },
+    couponButton: {
+        backgroundColor: "#ea580c",
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        borderRadius: 8,
+        alignItems: "center",
+        justifyContent: "center",
+    },
+    couponButtonDisabled: {
+        backgroundColor: "#475569",
+    },
+    couponButtonText: {
+        color: "#fff",
+        fontSize: 14,
+        fontWeight: "600",
+    },
+    removeCouponButton: {
+        backgroundColor: "#ef4444",
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        borderRadius: 8,
+        alignItems: "center",
+        justifyContent: "center",
+    },
+    removeCouponButtonText: {
+        color: "#fff",
+        fontSize: 14,
+        fontWeight: "600",
+    },
+    couponError: {
+        color: "#ef4444",
+        fontSize: 12,
+        marginTop: 6,
+    },
+    appliedCouponContainer: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 8,
+        marginTop: 8,
+        padding: 8,
+        backgroundColor: "rgba(16, 185, 129, 0.1)",
+        borderRadius: 6,
+        borderWidth: 1,
+        borderColor: "rgba(16, 185, 129, 0.3)",
+    },
+    appliedCouponText: {
+        color: "#10b981",
+        fontSize: 13,
+        fontWeight: "600",
+    },
+    discountValue: {
+        color: "#10b981",
     },
     infoRow: {
         flexDirection: "row",
